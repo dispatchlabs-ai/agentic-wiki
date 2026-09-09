@@ -4,7 +4,7 @@ Chris Reynolds maintains this project, affiliated with Dispatch Labs AI. Discuss
 large changes with the maintainer before implementing them. Small fixes should
 explain the problem, resulting behavior, and relevant verification.
 
-Use Linux, Node 24.19 or later, Git, and util-linux `flock`. Run `npm ci` and
+Use Linux or macOS, Node 24.19 or later, and Git. Run `npm ci` and
 `npm run check`. Tests use temporary repositories and synthetic records. Never
 submit private wiki content, real agent traces, credentials, or customer data.
 

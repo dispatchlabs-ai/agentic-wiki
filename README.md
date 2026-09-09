@@ -19,7 +19,7 @@ repository; it never serves that repository's files directly.
 
 ## Run the example
 
-Requires **Linux, Node 24.19+, Git, and `flock`** (util-linux). Node's built-in SQLite
+Requires **Linux or macOS, Node 24.19+, and Git**. Node's built-in SQLite
 is used; no database server is needed.
 
 ```sh

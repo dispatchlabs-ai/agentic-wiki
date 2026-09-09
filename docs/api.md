@@ -116,7 +116,7 @@ inspect the message rather than assuming every 400 means malformed Markdown.
 
 ## Git correctness and recovery
 
-The writer requires clean `main`, holds `.git/wiki-write.lock` using `flock`, writes
+The writer requires clean `main`, holds an atomic `.git/wiki-write.lock.d` directory lock, writes
 through a private Git index, then compare-and-swaps `refs/heads/main`. The commit
 contains every changed page and its operation receipt. Only those paths are then
 restored to the real index and worktree. It does not commit unrelated files or
@@ -138,3 +138,22 @@ editor endpoint; prior revisions remain readable, while current returns 404.
 Avoid rewriting content history: revision numbers and receipts depend on it.
 The writer does not run Git commit hooks or sign commits (`commit-tree` is used);
 repositories requiring those policies need a deliberate integration.
+
+## Writer lock recovery and upgrades
+
+The writer uses Node filesystem operations on local Linux and macOS filesystems;
+no extra locking utility is needed. Normal completion and exceptions release the
+lock. A writer killed abruptly can leave the directory behind. Other writers wait
+up to ten seconds, then fail with its location. Locks are never stolen based on
+age or PID, so a delayed writer cannot resume after its lock has been taken away.
+
+After a crash, stop every server and CLI writer for that content checkout. Inspect
+HEAD, operation receipts, and working-tree changes as described above. The lock's
+`owner.json` records its PID and start time as diagnostic information, not proof
+that a process is still alive. Only after all writers are stopped, remove the
+`wiki-write.lock.d` directory from the absolute Git directory reported by
+`git rev-parse --absolute-git-dir`, then restart. Do not remove live locks.
+
+When upgrading from the original flock-based alpha, stop all old writers first;
+the two lock protocols do not coordinate. Shared/network filesystems and writers
+on multiple hosts are outside the supported lock model.
