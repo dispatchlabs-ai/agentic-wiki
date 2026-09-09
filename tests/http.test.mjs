@@ -97,7 +97,9 @@ test("HTTP reads, same-origin writes, idempotent retries and revision conflicts"
     await request("/api/articles/created/current.json")
   ).json();
   assert.equal(current.revision_id, receipt.articles[0].revision_id);
-  assert.equal((await save({ ...draft, operation_id: "stale" })).status, 409);
+  const stale = await save({ ...draft, operation_id: "stale" });
+  assert.equal(stale.status, 409);
+  assert.equal((await stale.json()).code, "REVISION_CONFLICT");
   assert.equal(
     (await request("/api/articles/created/history.json")).status,
     200,
@@ -342,4 +344,25 @@ test("unchanged saves and mixed batches return existing revisions on retries", a
   assert.equal(retry.commit, saved.commit);
   assert.deepEqual(retry.articles, saved.articles);
   assert.equal(new GitWiki(repo).history("new").length, 2);
+});
+
+test("writer failures carry stable codes and the browser loads shared limits", async (t) => {
+  const { request, save, repo } = await server(t);
+  const invalid = await save({
+    operation_id: "invalid",
+    updates: [update("new", "")],
+  });
+  assert.equal(invalid.status, 400);
+  assert.equal((await invalid.json()).code, "INVALID_EDIT");
+  git(repo, ["checkout", "-b", "other"]);
+  const wrongBranch = await save({
+    operation_id: "branch",
+    updates: [update("new")],
+  });
+  assert.equal(wrongBranch.status, 409);
+  assert.equal((await wrongBranch.json()).code, "BRANCH_CONFLICT");
+  assert.match(
+    await (await request("/assets/edit-contract.js")).text(),
+    /export const editSchema/,
+  );
 });

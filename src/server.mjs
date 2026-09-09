@@ -1,3 +1,4 @@
+import { WikiError } from "./errors.mjs";
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -104,11 +105,21 @@ export function createWiki({
           worker.on("error", reject);
           worker.on("close", resolve);
         });
-        if (code !== 0)
+        if (code !== 0) {
+          let failure;
+          try {
+            failure = JSON.parse(err);
+          } catch {
+            /* Unexpected subprocess failure. */
+          }
           return send(
-            /Conflict|identity already used|Working tree/.test(err) ? 409 : 400,
-            { error: err.trim() || "Writer unavailable" },
+            [400, 409, 503].includes(failure?.status) ? failure.status : 503,
+            {
+              error: failure?.error || "Writer unavailable",
+              code: failure?.code || "WRITER_UNAVAILABLE",
+            },
           );
+        }
         refresh();
         return send(200, {
           ...JSON.parse(out),
@@ -118,6 +129,7 @@ export function createWiki({
       if (req.method !== "GET")
         return send(405, { error: "Method not allowed" });
       const asset = {
+        "/assets/edit-contract.js": ["edit-contract.js", "text/javascript"],
         "/assets/client.js": ["client.js", "text/javascript"],
         "/assets/style.css": ["style.css", "text/css"],
       }[url.pathname];
@@ -153,12 +165,10 @@ export function createWiki({
             }),
           );
         } catch (e) {
-          return send(
-            /Invalid trace search|Too many trace search terms/.test(e.message)
-              ? 400
-              : 503,
-            { error: e.message },
-          );
+          return send(e instanceof WikiError ? e.status : 503, {
+            error: e.message,
+            code: e instanceof WikiError ? e.code : "SEARCH_UNAVAILABLE",
+          });
         }
       }
       const traceRoute = url.pathname.match(
