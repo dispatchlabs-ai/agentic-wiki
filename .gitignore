@@ -1,0 +1,11 @@
+node_modules/
+.runtime/
+*.sqlite3*
+.env
+.env.*
+*.sqlite*
+*.db
+*.db-*
+*.pem
+*.key
+*.log

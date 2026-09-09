@@ -1,0 +1,199 @@
+import fs from "node:fs";
+import path from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { Worker } from "node:worker_threads";
+export const TRACE_VERSION = 1;
+export const MAX_TRACE_BYTES = 128 * 1024 * 1024;
+export const digest = (bytes) =>
+  createHash("sha256").update(bytes).digest("hex");
+export function parseRecords(bytes) {
+  if (bytes.length > MAX_TRACE_BYTES) throw new Error("Trace exceeds 128 MiB");
+  const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  return text.split(/\r?\n/).flatMap((line, index) => {
+    if (!line.trim()) return [];
+    let value;
+    try {
+      value = JSON.parse(line);
+    } catch {
+      throw new Error(`Invalid JSON on source line ${index + 1}`);
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new Error(`Expected object on source line ${index + 1}`);
+    return [{ line: index + 1, value }];
+  });
+}
+export function detectFormat(records) {
+  const first = records[0]?.value;
+  if (first?.type === "session_meta") return "codex";
+  if (first?.type === "session") return "pi";
+  throw new Error("Expected a Codex session_meta or pi session header");
+}
+export function importTrace(root, source, title) {
+  if (fs.statSync(source).size > MAX_TRACE_BYTES)
+    throw new Error("Trace exceeds 128 MiB");
+  const bytes = fs.readFileSync(source),
+    records = parseRecords(bytes),
+    format = detectFormat(records),
+    id = digest(bytes);
+  const metadata = {
+    id,
+    format,
+    title: String(title || `${format} session`).slice(0, 300),
+    bytes: bytes.length,
+    records: records.length,
+    session_id: records[0].value.payload?.id || records[0].value.id || null,
+    imported_at: new Date().toISOString(),
+  };
+  fs.mkdirSync(root, { recursive: true });
+  const target = path.join(root, id);
+  if (fs.existsSync(target))
+    return JSON.parse(
+      fs.readFileSync(path.join(target, "metadata.json"), "utf8"),
+    );
+  const temporary = path.join(root, `.import-${randomUUID()}`);
+  fs.mkdirSync(temporary);
+  try {
+    fs.writeFileSync(path.join(temporary, "source.jsonl"), bytes, {
+      mode: 0o444,
+    });
+    fs.writeFileSync(
+      path.join(temporary, "metadata.json"),
+      JSON.stringify(metadata, null, 2),
+    );
+    try {
+      fs.renameSync(temporary, target);
+    } catch (error) {
+      if (!fs.existsSync(target)) throw error;
+    }
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+  return JSON.parse(
+    fs.readFileSync(path.join(target, "metadata.json"), "utf8"),
+  );
+}
+export class TraceStore {
+  constructor(root, { maxBytes = 64 * 1024 * 1024, timeout = 30000 } = {}) {
+    this.root = root;
+    this.maxBytes = maxBytes;
+    this.timeout = timeout;
+    this.cache = new Map();
+    this.pending = new Map();
+    this.queue = [];
+    this.workers = new Set();
+    this.bytes = 0;
+    this.renders = 0;
+    this.closed = false;
+  }
+  catalog() {
+    if (!this.root || !fs.existsSync(this.root)) return [];
+    return fs
+      .readdirSync(this.root)
+      .filter((id) => /^[a-f0-9]{64}$/.test(id))
+      .map((id) => this.metadata(id))
+      .filter(Boolean)
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }
+  metadata(id) {
+    if (!this.root || !/^[a-f0-9]{64}$/.test(id)) return null;
+    try {
+      const value = JSON.parse(
+        fs.readFileSync(path.join(this.root, id, "metadata.json"), "utf8"),
+      );
+      if (value.id !== id || !["codex", "pi"].includes(value.format))
+        return null;
+      return { ...value, url: `/traces/${id}/` };
+    } catch {
+      return null;
+    }
+  }
+  read(id, page = 1) {
+    if (this.closed) return Promise.reject(new Error("Trace store closed"));
+    if (!Number.isSafeInteger(page) || page < 1)
+      return Promise.reject(new Error("Invalid trace page"));
+    const metadata = this.metadata(id);
+    if (!metadata) return Promise.resolve(null);
+    const key = `${TRACE_VERSION}:${id}:${page}`;
+    if (this.cache.has(key)) {
+      const value = this.cache.get(key);
+      this.cache.delete(key);
+      this.cache.set(key, value);
+      return Promise.resolve(value.result);
+    }
+    if (this.pending.has(key)) return this.pending.get(key);
+    if (this.queue.length >= 32)
+      return Promise.reject(new Error("Trace renderer busy"));
+    const promise = new Promise((resolve, reject) =>
+      this.queue.push({ key, metadata, page, resolve, reject }),
+    );
+    this.pending.set(key, promise);
+    this.pump();
+    return promise;
+  }
+  pump() {
+    while (!this.closed && this.workers.size < 2 && this.queue.length) {
+      const job = this.queue.shift();
+      const worker = new Worker(
+        new URL("./trace-worker.mjs", import.meta.url),
+        {
+          workerData: {
+            root: this.root,
+            metadata: job.metadata,
+            page: job.page,
+          },
+          resourceLimits: { maxOldGenerationSizeMb: 512 },
+        },
+      );
+      this.workers.add(worker);
+      this.renders++;
+      let finished = false;
+      const finish = (error, result) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        this.workers.delete(worker);
+        this.pending.delete(job.key);
+        void worker.terminate();
+        if (error) job.reject(error);
+        else {
+          const size = Buffer.byteLength(JSON.stringify(result));
+          if (size <= this.maxBytes) {
+            while (
+              this.cache.size &&
+              (this.bytes + size > this.maxBytes || this.cache.size >= 256)
+            ) {
+              const key = this.cache.keys().next().value;
+              this.bytes -= this.cache.get(key).size;
+              this.cache.delete(key);
+            }
+            this.cache.set(job.key, { result, size });
+            this.bytes += size;
+          }
+          job.resolve(result);
+        }
+        this.pump();
+      };
+      const timer = setTimeout(
+        () => finish(new Error("Trace rendering timed out")),
+        this.timeout,
+      );
+      worker.once("message", (value) =>
+        value.error
+          ? finish(new Error(value.error))
+          : finish(null, value.result),
+      );
+      worker.once("error", (error) => finish(error));
+      worker.once("exit", () => finish(new Error("Trace worker stopped")));
+    }
+  }
+  close() {
+    this.closed = true;
+    for (const job of this.queue.splice(0)) {
+      this.pending.delete(job.key);
+      job.reject(new Error("Trace store closed"));
+    }
+    for (const worker of this.workers) void worker.terminate();
+    this.cache.clear();
+    this.bytes = 0;
+  }
+}
