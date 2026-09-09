@@ -1,11 +1,8 @@
-import { unified } from "unified";
-import remarkParse from "remark-parse";
-import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
 import { wikiLinks } from "./wiki.mjs";
-import { headingIds } from "./markdown-structure.mjs";
+import { headingIds, markdownParser } from "./markdown-structure.mjs";
 export const escape = (s) =>
   String(s ?? "").replace(
     /[&<>"']/g,
@@ -14,9 +11,7 @@ export const escape = (s) =>
         c
       ],
   );
-const parser = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
+const parser = markdownParser()
   .use(headingIds)
   .use(wikiLinks)
   .use(remarkRehype)
