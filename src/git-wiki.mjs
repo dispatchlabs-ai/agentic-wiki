@@ -1,5 +1,6 @@
 // Markdown is authoritative. All historical bodies are read from Git objects;
 // this module keeps only bounded, disposable in-memory projections.
+import { WikiError } from "./errors.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -265,10 +266,12 @@ export class GitWiki {
 // update-ref provides compare-and-swap even against writers that ignore the lock.
 export function commitFiles(repo, expectedHead, files, message) {
   if (git(repo, ["symbolic-ref", "--short", "HEAD"]) !== "main")
-    throw Error("Wiki edits require main");
+    throw new WikiError("BRANCH_CONFLICT", "Wiki edits require main", 409);
   if (git(repo, ["status", "--porcelain"]))
-    throw Error(
+    throw new WikiError(
+      "WORKTREE_CONFLICT",
       "Working tree has changes; commit or reconcile them before wiki edits",
+      409,
     );
   const index = path.join(
     git(repo, ["rev-parse", "--absolute-git-dir"]),

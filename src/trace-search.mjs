@@ -1,4 +1,5 @@
 // Disposable dialogue index. Original JSONL remains the only trace authority.
+import { WikiError } from "./errors.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -10,7 +11,7 @@ import {
   TRACE_VERSION,
   TRACE_PAGE_SIZE,
 } from "./traces.mjs";
-import { project } from "./trace-worker.mjs";
+import { project } from "./trace-format.mjs";
 const filename = (root) => path.join(root, "search.sqlite3");
 export function indexTraces(root) {
   fs.mkdirSync(root, { recursive: true });
@@ -95,9 +96,10 @@ export function searchTraces(root, query, { limit = 20, offset = 0 } = {}) {
     offset < 0 ||
     offset > 10000
   )
-    throw Error("Invalid trace search");
+    throw new WikiError("INVALID_SEARCH", "Invalid trace search");
   const terms = query.match(/[\p{L}\p{N}_-]+/gu) || [];
-  if (terms.length > 30) throw Error("Too many trace search terms");
+  if (terms.length > 30)
+    throw new WikiError("INVALID_SEARCH", "Too many trace search terms");
   if (!root || !fs.existsSync(filename(root)))
     return { indexed: false, results: [], nextOffset: null };
   const db = new DatabaseSync(filename(root), { readOnly: true });

@@ -1,3 +1,4 @@
+import { WikiError } from "./errors.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -19,8 +20,10 @@ export async function withWriterLock(repo, action, { timeout = 10000 } = {}) {
     } catch (error) {
       if (error.code !== "EEXIST") throw error;
       if (performance.now() >= deadline)
-        throw Error(
+        throw new WikiError(
+          "WRITER_BUSY",
           `Writer lock timeout: ${lock}. If a writer crashed, stop all writers, inspect the repository, then remove this lock directory. See docs/api.md.`,
+          503,
         );
       await delay(Math.min(50, Math.max(1, deadline - performance.now())));
     }

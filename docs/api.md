@@ -113,8 +113,13 @@ page after failures; it does not persist unsaved drafts across closing/reloading
 HTTP errors: 400 invalid JSON/edit/search, 403 access/origin rejection, 404 absent
 article/revision/route, 409 revision/operation/dirty-checkout conflict, 413 oversized
 request, 405 unsupported method, 500 unexpected server failure. `error` explains
-the failure. Git/lock/environment failures from the writer currently return 400;
-inspect the message rather than assuming every 400 means malformed Markdown.
+the failure. Writer failures also return a stable `code`: `INVALID_EDIT` (400),
+`REVISION_CONFLICT`, `OPERATION_CONFLICT`, `BRANCH_CONFLICT`, or `WORKTREE_CONFLICT`
+(409), and `WRITER_BUSY` or `WRITER_UNAVAILABLE` (503). The CLI emits the same
+structured error on stderr with `status`; clients need not classify prose. Unknown
+subprocess failures are 503. A failure can follow a durable commit: retain the same
+operation ID when retrying. Browser tool schemas and writer string/batch limits
+share `public/edit-contract.js`; Git/revision/link checks remain server-side.
 
 ## Git correctness and recovery
 

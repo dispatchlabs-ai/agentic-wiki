@@ -1,3 +1,4 @@
+import { editSchema } from "./edit-contract.js";
 export async function request(url, draft) {
   const response = await fetch(
     url,
@@ -113,43 +114,7 @@ export async function registerTools(context, writable) {
       name: "wiki.save",
       description:
         "Commit one to ten coordinated Markdown edits. Read current revision IDs first; null creates a page. Retry with identical input and operation_id. Commit, remote push and publication are reported separately.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          operation_id: id,
-          updates: {
-            type: "array",
-            minItems: 1,
-            maxItems: 10,
-            items: {
-              type: "object",
-              properties: {
-                id,
-                expected_revision_id: { type: ["string", "null"] },
-                title: { type: "string", maxLength: 200 },
-                description: { type: "string", maxLength: 600 },
-                topic: { type: "string", maxLength: 100 },
-                body: { type: "string", maxLength: 100000 },
-                summary: { type: "string", maxLength: 1000 },
-                related: { type: "array", items: id },
-                questions: { type: "array", items: { type: "string" } },
-              },
-              required: [
-                "id",
-                "expected_revision_id",
-                "title",
-                "description",
-                "topic",
-                "body",
-                "summary",
-              ],
-              additionalProperties: false,
-            },
-          },
-        },
-        required: ["operation_id", "updates"],
-        additionalProperties: false,
-      },
+      inputSchema: editSchema,
       execute: (args) => request("/api/articles/edits", args),
     });
   const controller = new AbortController();

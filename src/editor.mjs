@@ -1,3 +1,5 @@
+import { WikiError } from "./errors.mjs";
+import { editSchema } from "../public/edit-contract.js";
 import fs from "node:fs";
 import path from "node:path";
 import { withWriterLock } from "./writer-lock.mjs";
@@ -14,21 +16,27 @@ import {
 } from "./git-wiki.mjs";
 import { references } from "./wiki.mjs";
 
+/** @param {string} repo @param {import("../public/edit-contract.js").EditDraft} draft
+ * @returns {import("../public/edit-contract.js").SaveReceipt} */
 export function saveGitEdits(repo, draft) {
   if (
     !draft ||
     !validId(draft.operation_id) ||
     !Array.isArray(draft.updates) ||
     draft.updates.length < 1 ||
-    draft.updates.length > 10
+    draft.updates.length > editSchema.properties.updates.maxItems
   )
-    throw Error("Invalid edit operation");
+    throw new WikiError("INVALID_EDIT", "Invalid edit operation");
   const wiki = new GitWiki(repo);
   const fingerprint = sha(JSON.stringify(draft));
   const prior = wiki.receipt(draft.operation_id);
   if (prior) {
     if (prior.fingerprint !== fingerprint)
-      throw Error("Operation identity already used for different content");
+      throw new WikiError(
+        "OPERATION_CONFLICT",
+        "Operation identity already used for different content",
+        409,
+      );
     return {
       ...prior.receipt,
       state: "already-saved",
@@ -49,24 +57,27 @@ export function saveGitEdits(repo, draft) {
   const seen = new Set();
   for (const u of draft.updates) {
     if (!u || !validId(u.id) || seen.has(u.id))
-      throw Error("Invalid or duplicate article identity");
+      throw new WikiError(
+        "INVALID_EDIT",
+        "Invalid or duplicate article identity",
+      );
     seen.add(u.id);
     const current = wiki.current(u.id);
     if (u.expected_revision_id !== (current?.revision_id || null))
-      throw Error("Conflict: article changed; read it again before editing");
-    for (const [field, max] of [
-      ["title", 200],
-      ["description", 600],
-      ["topic", 100],
-      ["body", 100000],
-      ["summary", 1000],
-    ]) {
+      throw new WikiError(
+        "REVISION_CONFLICT",
+        "Conflict: article changed; read it again before editing",
+        409,
+      );
+    for (const field of ["title", "description", "topic", "body", "summary"]) {
+      const max =
+        editSchema.properties.updates.items.properties[field].maxLength;
       if (
         typeof u[field] !== "string" ||
         !u[field].trim() ||
         u[field].length > max
       )
-        throw Error(`Invalid ${field}`);
+        throw new WikiError("INVALID_EDIT", `Invalid ${field}`);
     }
     for (const field of ["related", "questions"]) {
       if (
@@ -75,7 +86,7 @@ export function saveGitEdits(repo, draft) {
           u[field].length > 100 ||
           u[field].some((s) => typeof s !== "string" || s.length > 2000))
       )
-        throw Error(`Invalid ${field}`);
+        throw new WikiError("INVALID_EDIT", `Invalid ${field}`);
     }
     const metadata = current
       ? { ...wiki.pages.get(u.id) }
@@ -116,7 +127,10 @@ export function saveGitEdits(repo, draft) {
   for (const p of proposed.values())
     for (const target of [...references(p.body), ...p.related])
       if (!proposed.has(target))
-        throw Error(`Broken article link: ${p.id} -> ${target}`);
+        throw new WikiError(
+          "INVALID_EDIT",
+          `Broken article link: ${p.id} -> ${target}`,
+        );
   const receipt = {
     operation_id: draft.operation_id,
     state: "saved",
@@ -168,7 +182,13 @@ if (
       console.log(JSON.stringify(result));
     });
   } catch (e) {
-    console.error(e.message);
+    console.error(
+      JSON.stringify({
+        code: e instanceof WikiError ? e.code : "WRITER_UNAVAILABLE",
+        error: e.message,
+        status: e instanceof WikiError ? e.status : 503,
+      }),
+    );
     process.exitCode = 1;
   }
 }
