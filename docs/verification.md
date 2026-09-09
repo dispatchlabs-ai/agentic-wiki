@@ -51,3 +51,20 @@ The browser example used a separate ignored content repository; the committed
 example corpus remains the original three synthetic articles. No persistent
 service or network deployment was installed. Node 24 is the declared minimum;
 the initial execution checks used Node 26, not a version matrix.
+
+## Reproduce serving costs
+
+`npm run benchmark:serve` creates an isolated synthetic repository with 200 articles,
+50 subsequent commits, and a roughly 1 MiB / 2,001-record trace. It reports startup,
+cold/warm trace reads, trace search, and HTTP read median/p95 for four concurrent
+readers across ten further edits, plus event-loop p99 and sampled RSS. Increase
+`BENCH_ARTICLES`, `BENCH_COMMITS`, and `BENCH_RECORDS` to explore larger workloads.
+The HTTP client shares the server process; memory includes both and fixtures, and
+RSS is sampled rather than peak. These are reproducible observations, not load or
+capacity guarantees. Source archives and deployed instances are never used.
+
+Observed September 9, 2026 on Linux x86-64 / Node 26.8.1 with 1,000 articles,
+201 initial commits and 10,001 trace records (6.9 MB): startup 3,862 ms; cold/warm
+trace reads 223/7 ms; trace search 24 ms; four-reader edit batches median/p95
+73/77 ms; event-loop p99 74 ms; sampled RSS 311 MiB. Git refresh remains synchronous;
+these results do not justify treating the SQLite-only timings as serving latency.

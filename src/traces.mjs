@@ -3,6 +3,7 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { Worker } from "node:worker_threads";
 export const TRACE_VERSION = 1;
+export const TRACE_PAGE_SIZE = 100;
 export const MAX_TRACE_BYTES = 128 * 1024 * 1024;
 export const digest = (bytes) =>
   createHash("sha256").update(bytes).digest("hex");
@@ -113,6 +114,12 @@ export class TraceStore {
       return Promise.reject(new Error("Invalid trace page"));
     const metadata = this.metadata(id);
     if (!metadata) return Promise.resolve(null);
+    if (
+      Number.isSafeInteger(metadata.records) &&
+      metadata.records > 0 &&
+      page > Math.ceil(metadata.records / TRACE_PAGE_SIZE)
+    )
+      return Promise.resolve(null);
     const key = `${TRACE_VERSION}:${id}:${page}`;
     if (this.cache.has(key)) {
       const value = this.cache.get(key);

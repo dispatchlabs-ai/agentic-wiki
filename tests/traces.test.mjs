@@ -38,6 +38,7 @@ test("Codex imports exact bytes; JIT reads deduplicate concurrent work and reuse
   assert.equal(a.records.find((r) => r.line === 4).mirrorOf, 3);
   assert.equal(a.records.find((r) => r.line === 9).mirrorOf, 8);
   assert.equal(await store.read(metadata.id, 2), null);
+  assert.equal(store.renders, 1, "out-of-range pages must not start a worker");
   assert.equal(await store.read("../escape"), null);
 });
 test("pi preserves alternate branches, reasoning, tool calls and compaction without replaying tails", async (t) => {

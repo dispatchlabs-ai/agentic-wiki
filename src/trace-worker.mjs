@@ -6,9 +6,9 @@ import {
   parseRecords,
   detectFormat,
   MAX_TRACE_BYTES,
+  TRACE_PAGE_SIZE as PAGE_SIZE,
 } from "./traces.mjs";
 import { escape, link, renderMarkdown, shell } from "./render.mjs";
-const PAGE_SIZE = 100;
 const textOf = (value) => {
   if (typeof value === "string") return value;
   if (Array.isArray(value))

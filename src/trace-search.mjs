@@ -8,6 +8,7 @@ import {
   digest,
   MAX_TRACE_BYTES,
   TRACE_VERSION,
+  TRACE_PAGE_SIZE,
 } from "./traces.mjs";
 import { project } from "./trace-worker.mjs";
 const filename = (root) => path.join(root, "search.sqlite3");
@@ -69,7 +70,7 @@ export function indexTraces(root) {
           insert.run(
             m.id,
             event.line,
-            Math.floor(i / 100) + 1,
+            Math.floor(i / TRACE_PAGE_SIZE) + 1,
             event.kind,
             text,
           );
