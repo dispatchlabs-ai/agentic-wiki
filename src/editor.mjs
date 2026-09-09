@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { withWriterLock } from "./writer-lock.mjs";
 import { fileURLToPath } from "node:url";
 import {
   GitWiki,
@@ -141,22 +141,8 @@ if (
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   const repo = wikiRepo();
-  if (process.env.WIKI_GIT_LOCKED !== "1") {
-    const lock = path.join(
-      git(repo, ["rev-parse", "--absolute-git-dir"]),
-      "wiki-write.lock",
-    );
-    try {
-      execFileSync(
-        "flock",
-        ["-w", "10", lock, process.execPath, ...process.argv.slice(1)],
-        { stdio: "inherit", env: { ...process.env, WIKI_GIT_LOCKED: "1" } },
-      );
-    } catch {
-      process.exitCode = 1;
-    }
-  } else {
-    try {
+  try {
+    await withWriterLock(repo, async () => {
       const draft = JSON.parse(fs.readFileSync(0, "utf8"));
       const result = saveGitEdits(repo, draft);
       // Retry also retries a previously failed push. A failed remote never makes
@@ -175,9 +161,9 @@ if (
         result.remote = "push-failed";
       }
       console.log(JSON.stringify(result));
-    } catch (e) {
-      console.error(e.message);
-      process.exitCode = 1;
-    }
+    });
+  } catch (e) {
+    console.error(e.message);
+    process.exitCode = 1;
   }
 }
