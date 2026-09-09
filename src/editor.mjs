@@ -104,7 +104,12 @@ export function saveGitEdits(repo, draft) {
     proposed.set(u.id, parsePage(files[name], name, null));
     results.push({
       id: u.id,
-      number: (current?.number || 0) + 1,
+      number:
+        (current?.number || 0) +
+        Number(
+          git(repo, ["hash-object", "--stdin"], { input: files[name] }) !==
+            current?.revision_id,
+        ),
       url: `/wiki/${u.id}/`,
     });
   }
