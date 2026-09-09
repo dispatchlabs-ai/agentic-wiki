@@ -1,3 +1,4 @@
+import { indexTraces } from "../src/trace-search.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,7 @@ for (const [name, title] of [
 ]) {
   importTrace(traces, path.join(root, `examples/traces/${name}.jsonl`), title);
 }
+indexTraces(traces);
 const port = Number(process.env.PORT || 4317);
 createWiki({
   repo,

@@ -175,3 +175,38 @@ test("repeated same-stream messages survive, typed history context is labeled an
   assert.equal(revisions[1].superseded, true);
   assert.equal(revisions[2].superseded, false);
 });
+
+test("trace search is rebuildable, incremental and cites matching original lines", async (t) => {
+  const { indexTraces, searchTraces } = await import("../src/trace-search.mjs");
+  const { root, store } = fixture(t);
+  assert.equal(searchTraces(root, "prototype").indexed, false);
+  const m = importTrace(
+    root,
+    new URL("../examples/traces/codex.jsonl", import.meta.url),
+  );
+  assert.equal(indexTraces(root).added, 1);
+  assert.equal(indexTraces(root).added, 0);
+  const found = searchTraces(root, "prototype", { limit: 1 });
+  assert.equal(found.results.length, 1);
+  const hit = found.results[0];
+  const page = await store.read(hit.id, hit.page);
+  assert.match(page.records.find((r) => r.line === hit.line).text, /prototype/);
+  assert.ok(hit.url.endsWith(`#line-${hit.line}`));
+  assert.throws(() => searchTraces(root, "x", { limit: 100 }), /Invalid/);
+  assert.equal(searchTraces(root, '" OR *').results.length, 0);
+  const broken = path.join(root, "broken.jsonl");
+  fs.writeFileSync(broken, '{"type":"session","id":"broken"}\n');
+  const invalid = importTrace(root, broken);
+  const invalidSource = path.join(root, invalid.id, "source.jsonl");
+  fs.chmodSync(invalidSource, 0o644);
+  fs.appendFileSync(invalidSource, "{}\n");
+  assert.throws(() => indexTraces(root), /integrity/);
+  assert.deepEqual(searchTraces(root, "prototype", { limit: 1 }), found);
+  fs.rmSync(path.join(root, invalid.id), { recursive: true });
+  fs.rmSync(path.join(root, "search.sqlite3"));
+  assert.equal(indexTraces(root).added, 1);
+  assert.deepEqual(searchTraces(root, "prototype", { limit: 1 }), found);
+  fs.rmSync(path.join(root, m.id), { recursive: true });
+  indexTraces(root);
+  assert.equal(searchTraces(root, "prototype").results.length, 0);
+});
