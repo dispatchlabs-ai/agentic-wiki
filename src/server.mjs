@@ -7,6 +7,7 @@ import { GitWiki, wikiRepo } from "./git-wiki.mjs";
 import { WikiSearch } from "./wiki-search.mjs";
 import { article, shell, escape, link } from "./render.mjs";
 import { TraceStore } from "./traces.mjs";
+import { searchTraces } from "./trace-search.mjs";
 const assetRoot = fileURLToPath(new URL("../public/", import.meta.url));
 export function createWiki({
   repo = wikiRepo(),
@@ -141,6 +142,24 @@ export function createWiki({
               ),
               "text/html",
             );
+      }
+      if (url.pathname === "/api/traces/search") {
+        try {
+          return send(
+            200,
+            searchTraces(traces, url.searchParams.get("q") || "", {
+              limit: Number(url.searchParams.get("limit") || 20),
+              offset: Number(url.searchParams.get("offset") || 0),
+            }),
+          );
+        } catch (e) {
+          return send(
+            /Invalid trace search|Too many trace search terms/.test(e.message)
+              ? 400
+              : 503,
+            { error: e.message },
+          );
+        }
       }
       const traceRoute = url.pathname.match(
         /^\/(?:traces\/([a-f0-9]{64})\/|api\/traces\/([a-f0-9]{64})\.json)$/,

@@ -220,6 +220,7 @@ test("WebMCP registers discoverable schemas and invokes the underlying HTTP API"
       "wiki.search",
       "wiki.read",
       "wiki.history",
+      "wiki.traceSearch",
       "wiki.traces",
       "wiki.trace",
       "wiki.save",
@@ -232,11 +233,16 @@ test("WebMCP registers discoverable schemas and invokes the underlying HTTP API"
       .readOnlyHint,
     false,
   );
+  const traceSearch = registered.find(
+    (r) => r.tool.name === "wiki.traceSearch",
+  ).tool;
+  assert.equal((await traceSearch.execute({ q: "prototype" })).indexed, false);
+  assert.equal((await request("/api/traces/search?q=x&limit=99")).status, 400);
   controller.abort();
   assert.ok(registered.every((r) => r.options.signal.aborted));
   const readonly = [];
   await registerTools({ registerTool: (t) => readonly.push(t) }, false);
-  assert.equal(readonly.length, 5);
+  assert.equal(readonly.length, 6);
 });
 
 test("failed index transactions keep reader and search on one snapshot, then recover", async (t) => {
