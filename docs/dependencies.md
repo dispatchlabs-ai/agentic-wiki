@@ -2,7 +2,7 @@
 
 Reviewed September 9, 2026 against the npm registry and upstream release metadata.
 
-All eight direct dependencies are at their latest stable versions. The five older
+At source-alpha preparation, all eight direct dependencies were at their latest stable versions. The five older
 transitive versions below are selected by upstream dependency ranges; no overrides
 are applied across major versions. `npm audit` reports zero known vulnerabilities.
 Existing locked versions are retained rather than downgraded solely for soak age;
@@ -122,3 +122,18 @@ CI uses checkout 7.0.1 (July 20; eligible August 19) and setup-node 7.0.0
 | [vfile](https://registry.npmjs.org/vfile)                                                                                         | 6.0.3  | 6.0.3         | 2024-08-27     | MIT          | Current                                     |
 | [vfile-message](https://registry.npmjs.org/vfile-message)                                                                         | 4.0.3  | 4.0.3         | 2025-07-26     | MIT          | Current                                     |
 | [zwitch](https://registry.npmjs.org/zwitch)                                                                                       | 2.0.4  | 2.0.4         | 2022-11-16     | MIT          | Current                                     |
+
+## Browser test addition — September 9, 2026
+
+Development-only `@playwright/test`, `playwright`, and `playwright-core` are pinned
+at 1.62.1 (Apache-2.0), released July 30. This satisfies the 30-day CI soak; 1.63.0
+(September 4) is deferred. Registry metadata was checked with `npm view` and the
+updated lockfile audit reported zero vulnerabilities. Chromium is downloaded by
+`npx playwright install chromium`, outside the source distribution; its bundled
+notices apply. Runtime dependencies remain unchanged.
+
+The additional CI runtime is Node 26.6.0 (August 4), which also satisfies the
+30-day runtime soak. Local verification additionally used the pre-existing
+Node 26.8.1 installation.
+Playwright also locks optional macOS-only `fsevents` 2.3.2 (MIT); it is not
+installed in the supported Linux test environment.
