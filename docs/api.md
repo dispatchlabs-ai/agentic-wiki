@@ -99,7 +99,9 @@ A receipt separates three outcomes:
 or `refresh-failed` and is only returned by HTTP. A successful retry can return an
 older receipt while the current article has moved on; read current again before
 starting another edit. `revision_id` identifies the full Markdown blob, including
-metadata, rather than a global repository commit.
+metadata, rather than a global repository commit. An update producing identical
+Markdown bytes succeeds with the existing article revision. Its operation receipt
+is still committed; mixed batches advance only articles whose bytes change.
 
 Retry an ambiguous response with the **same operation ID and identical JSON**.
 The committed `.wiki/operations/ID.json` fingerprint prevents duplicate edits and

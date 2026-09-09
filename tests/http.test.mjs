@@ -295,3 +295,45 @@ test("trace HTML and JSON routes share snapshots and validate page requests", as
   assert.equal((await request(`/traces/${metadata.id}/?page=2`)).status, 404);
   assert.equal((await request(`/traces/${"0".repeat(64)}/`)).status, 404);
 });
+
+test("unchanged saves and mixed batches return existing revisions on retries", async (t) => {
+  const repo = fixture(t);
+  const { request } = await server(t, { repo, write: true });
+  const save = async (draft) => {
+    const response = await request("/api/articles/edits", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Wiki-Write": "1",
+        Origin: "http://wiki.test",
+      },
+      body: JSON.stringify(draft),
+    });
+    assert.equal(response.status, 200, await response.clone().text());
+    return response.json();
+  };
+  const first = await save({
+    operation_id: "initial",
+    updates: [update("new")],
+  });
+  const unchanged = {
+    ...update("new"),
+    expected_revision_id: first.articles[0].revision_id,
+  };
+  const draft = {
+    operation_id: "mixed",
+    updates: [unchanged, update("other")],
+  };
+  const saved = await save(draft);
+  assert.equal(saved.articles[0].number, 1);
+  assert.equal(saved.articles[1].number, 1);
+  await save({
+    operation_id: "later",
+    updates: [{ ...unchanged, body: "Later content." }],
+  });
+  const retry = await save(draft);
+  assert.equal(retry.state, "already-saved");
+  assert.equal(retry.commit, saved.commit);
+  assert.deepEqual(retry.articles, saved.articles);
+  assert.equal(new GitWiki(repo).history("new").length, 2);
+});
