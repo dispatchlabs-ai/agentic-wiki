@@ -1,18 +1,27 @@
-import { unified } from "unified";
-import remarkParse from "remark-parse";
+import { markdownParser } from "./markdown-structure.mjs";
 export function references(body) {
+  const tree = markdownParser.parse(body);
+  wikiLinks()(tree);
+  const definitions = new Map();
+  function collect(n) {
+    if (n.type === "definition" && !definitions.has(n.identifier))
+      definitions.set(n.identifier, n.url);
+    n.children?.forEach(collect);
+  }
+  collect(tree);
   const out = new Set();
   function walk(n) {
-    if (n.type === "text")
-      for (const m of n.value.matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g))
-        out.add(m[1]);
-    if (n.type === "link") {
-      const article = n.url.match(/^\/wiki\/([^/?#]+)(?:[/?#]|$)/);
-      if (article) out.add(article[1]);
-    }
-    if (!["code", "inlineCode"].includes(n.type)) n.children?.forEach(walk);
+    const url =
+      n.type === "link"
+        ? n.url
+        : n.type === "linkReference"
+          ? definitions.get(n.identifier)
+          : null;
+    const article = url?.match(/^\/wiki\/([^/?#]+)(?:[/?#]|$)/);
+    if (article) out.add(article[1]);
+    n.children?.forEach(walk);
   }
-  walk(unified().use(remarkParse).parse(body));
+  walk(tree);
   return [...out];
 }
 export function wikiLinks() {

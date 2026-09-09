@@ -283,3 +283,32 @@ test("colliding heading suffixes stay unique in HTML and rebuilt search indexes"
   assert.equal(index.sync(wiki).changed, 2);
   assert.equal(index.search("Needlethird").articles[0].anchor, ids[2]);
 });
+
+test("reference-style links agree with rendering, validation and backlinks", async (t) => {
+  const repo = fixture(t);
+  const body =
+    "[Guide][Target] and [guide][] and [guide].\n\n[Target]: /wiki/guide/#section-start\n[guide]: /wiki/guide/\n\n`[[ignored]]`\n\n| Link |\n| --- |\n| [[guide]] |";
+  assert.deepEqual(references(body), ["guide"]);
+  assert.match(
+    await renderMarkdown(body),
+    /href="\/wiki\/guide\/#section-start"/,
+  );
+  saveGitEdits(repo, {
+    operation_id: "references",
+    updates: [update("linked", body)],
+  });
+  const index = new WikiSearch(":memory:");
+  t.after(() => index.close());
+  index.sync(new GitWiki(repo));
+  assert.equal(index.backlinks("guide")[0].id, "linked");
+  assert.throws(
+    () =>
+      saveGitEdits(repo, {
+        operation_id: "missing-reference",
+        updates: [
+          update("broken", "[Missing][target]\n\n[target]: /wiki/missing/"),
+        ],
+      }),
+    /Broken article link/,
+  );
+});
