@@ -19,9 +19,9 @@
 - Dependency freshness and license inventory are recorded in [dependencies](dependencies.md).
   `npm audit` reported zero known vulnerabilities.
 
-These are local source-alpha checks. Hosted GitHub CI, private vulnerability
-reporting, branch/tag policies, signed releases, and public visibility have not
-been configured or verified. No package or container release was prepared.
+These are historical, pre-publication source-alpha checks. At that checkpoint,
+hosted GitHub CI, private vulnerability reporting, branch/tag policies, signed
+releases, and public visibility had not yet been configured or verified. No package or container release was prepared.
 
 ## Initial verification
 
@@ -68,3 +68,10 @@ Observed September 9, 2026 on Linux x86-64 / Node 26.8.1 with 1,000 articles,
 trace reads 223/7 ms; trace search 24 ms; four-reader edit batches median/p95
 73/77 ms; event-loop p99 74 ms; sampled RSS 311 MiB. Git refresh remains synchronous;
 these results do not justify treating the SQLite-only timings as serving latency.
+
+## Focused follow-up checks — September 9, 2026
+
+All 26 core tests passed on Node 24.19.0, 26.6.0 and the existing 26.8.1 runtime.
+The Chromium editor smoke test passed on Node 24.19.0 with Playwright 1.62.1:
+module loading, a saved edit, and a second unchanged save retaining revision 2.
+Formatting passed. This browser test does not claim native WebMCP compatibility.

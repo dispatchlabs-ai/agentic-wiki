@@ -17,3 +17,7 @@ AI-assisted contributions are welcome. Disclose material AI assistance and take
 responsibility for understanding and verifying the submitted code. Avoid automated
 issue or pull-request spam. Treat people respectfully and keep discussions focused
 on the work. Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+Start with [contributor priorities and contracts](docs/contributor-guide.md) for
+small scoped improvements, format fixtures, and acceptance criteria. Browser work
+also needs `npx playwright install chromium` and `npm run test:browser`.
