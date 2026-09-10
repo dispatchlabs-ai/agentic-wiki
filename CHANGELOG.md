@@ -10,6 +10,11 @@
 
 ### Fixed
 
+- Restore the approved desktop proportions and editorial typography, tighten mobile
+  spacing, separate Edit from reading tabs, and distinguish sidebar navigation groups.
+- Enrich the synthetic articles with linked decisions, source citations, related
+  articles and an open review question. Existing content is never silently reseeded.
+
 - Recreated articles advance their complete revision lifecycle. New durable receipts
   persist blob IDs; retries preserve those IDs, with fallback for older receipts.
 - Failed trace-search indexes no longer take down article-only search or catalog

@@ -58,11 +58,11 @@ export function home(wiki, params) {
         ? recent
             .map((p) => {
               const current = wiki.current(p.id);
-              return `<section class="entry"><p class="eyebrow">${date(p.updated_at)} · ${p.number === 1 ? "Created" : "Updated"}</p><h2>${link(p.url, p.title)}</h2><p>${e(current.summary || p.description)}</p><div class="actions">${link(p.url, "Read article")}${p.number > 1 ? link(queryLink(`/wiki/${p.id}/compare/`, { from: p.number - 1, to: p.number }), "View changes") : ""}</div></section>`;
+              return `<section class="entry"><p class="eyebrow">${date(p.updated_at)} · ${p.number === 1 ? "Created" : "Updated"}</p><h2>${link(p.url, p.title)}</h2><p>${e(current.summary || p.description)}</p><div class="actions">${link(p.url, "Read article →")}${p.number > 1 ? link(queryLink(`/wiki/${p.id}/compare/`, { from: p.number - 1, to: p.number }), "View changes") : ""}</div></section>`;
             })
             .join("")
         : empty("No updates in this period.")
-    }<p class="pagination">${link("/wiki/", "Browse all articles")}</p></div><aside class="sidebar"><section><h2>Open questions</h2>${questions.length ? questions.map(({ q, p }) => `<p>${e(q)}<br>${link(`/wiki/${p.id}/`, p.title)}</p>`).join("") : empty("No open questions recorded.")}</section><section><h2>Explore topics</h2>${list(topicNames(wiki).map((t) => link(queryLink("/wiki/", { topic: t }), t)))}</section><section><h2>Follow the evidence</h2><p>Read the original conversations behind your articles.</p>${link("/traces/", "Browse traces")}</section></aside></div>`,
+    }<p class="pagination">${link("/wiki/", "Browse all articles →")}</p></div><aside class="sidebar"><section><h2>Open questions</h2>${questions.length ? questions.map(({ q, p }) => `<p>${e(q)}<br>${link(`/wiki/${p.id}/`, p.title)}</p>`).join("") : empty("No open questions recorded.")}</section><section><h2>Explore topics</h2>${list(topicNames(wiki).map((t) => link(queryLink("/wiki/", { topic: t }), t)))}</section><section><h2>Follow the evidence</h2><p>Read the original conversations behind your articles.</p>${link("/traces/", "Browse traces →")}</section></aside></div>`,
     { active: "Home" },
   );
 }

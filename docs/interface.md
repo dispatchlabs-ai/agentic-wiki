@@ -8,7 +8,9 @@ and trace search, the trace catalog, and trace reading.
 
 `public/theme.css` owns semantic color tokens. Light mode uses restrained blue
 links (`#1a65a6`); dark mode uses `#8ab4f8`. `public/style.css` owns layout and
-typography. At 760px and below, sidebars move into the reading flow, filters
+typography. The desktop shell is capped at 1280px, with a 70/30 content/sidebar
+split and serif article prose. Mobile prose uses system sans serif, with compact
+metadata spacing and a separate Edit link outside the reading tabs. At 760px and below, sidebars move into the reading flow, filters
 collapse into disclosures, comparisons stack, and revision selectors fill their
 rows. Simple Markdown tables with up to four columns become labeled records;
 larger tables have a keyboard-focusable horizontal scrolling region.
@@ -53,3 +55,8 @@ synthetic content and trace repositories. Coverage includes eleven routes at
 390px, 768px, and 1440px in both themes, document overflow, appearance persistence,
 mobile filters, trace anchors, preview sanitization, draft retention, and saving.
 Review screenshots are written under ignored `.runtime/responsive-review/`.
+
+The synthetic example articles cite the bundled immutable traces at their original
+answer lines. To refresh an existing demo, review and commit the example Markdown
+into its content repository explicitly; startup never replaces existing articles
+or rewrites their history. Maintenance commits remain visible in historical views.

@@ -123,7 +123,7 @@ export const queryLink = (pathname, params) =>
     ),
   ).toString();
 export function shell(title, body, { active = "", className = "" } = {}) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escape(title)} · Agentic Wiki</title><script src="/assets/theme.js"></script><link rel="stylesheet" href="/assets/theme.css"><link rel="stylesheet" href="/assets/style.css"><script type="module" src="/assets/client.js"></script></head><body><a class="skip-link" href="#main">Skip to content</a><header class="site-header"><a href="/" class="brand">Agentic Wiki</a><nav class="site-nav" aria-label="Main navigation">${[
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escape(title)} · Agentic Wiki</title><script src="/assets/theme.js"></script><link rel="stylesheet" href="/assets/theme.css"><link rel="stylesheet" href="/assets/style.css"><script type="module" src="/assets/client.js"></script></head><body><a class="skip-link" href="#main">Skip to content</a><header class="site-header"><a href="/" class="brand">Agentic Wiki<span class="brand-subtitle">Memory, with a path back to the evidence</span></a><nav class="site-nav" aria-label="Main navigation">${[
     ["/", "Home"],
     ["/wiki/", "Topics"],
     ["/traces/", "Traces"],
@@ -183,9 +183,7 @@ export function articleHeader(
       ([url, label]) =>
         `<a href="${url}"${active === label ? ' aria-current="page"' : ""}>${label}${label === "History" ? ` · ${p.revisionCount}` : label === "Sources" ? ` · ${sources(p).length}` : ""}</a>`,
     )
-    .join(
-      "",
-    )}${write && !historical ? `<a href="/wiki/${p.id}/edit/">Edit article</a>` : ""}</nav>`;
+    .join("")}</nav>`;
 }
 export async function article(
   wiki,
@@ -203,7 +201,7 @@ export async function article(
     .filter(Boolean);
   return shell(
     p.title,
-    `<div class="layout article-layout"><div>${articleHeader(p, "Article", { write, historical: !!revision })}<p class="meta">Revision ${p.number} · Updated ${date(p.created_at)}</p>${revision ? `<nav class="actions" aria-label="Revision navigation">${p.number > 1 ? link(`/wiki/${id}/revision/${p.number - 1}/`, "Previous revision") : ""}${p.number < p.revisionCount ? link(`/wiki/${id}/revision/${p.number + 1}/`, "Next revision") : ""}${link(queryLink(`/wiki/${id}/compare/`, { from: p.number, to: p.revisionCount }), "Compare with current")}</nav>` : `<div class="notice">Latest change: ${escape(p.summary)}${p.number > 1 ? ` · ${link(queryLink(`/wiki/${id}/compare/`, { from: p.number - 1, to: p.number }), "View changes")}` : ""}</div>`}${toc.length ? `<details class="mobile-toc"><summary>On this page</summary>${tocLinks}</details>` : ""}<article>${await renderMarkdown(p.body)}</article></div><aside class="sidebar">${toc.length ? `<section class="desktop-toc"><h2>On this page</h2>${tocLinks}</section>` : ""}<div class="article-side-links">${related.length ? `<section><h2>Related articles</h2>${list(related.map((p) => link(p.url, p.title)))}</section>` : ""}<section><h2>Linked from</h2>${index.backlinks(id).length ? list(index.backlinks(id).map((p) => link(`/wiki/${p.id}/`, p.title))) : '<p class="muted">No incoming article links yet.</p>'}</section></div></aside></div>`,
+    `<div class="layout article-layout"><div>${articleHeader(p, "Article", { write, historical: !!revision })}<div class="revision-meta"><p class="meta">Revision ${p.number} · Updated ${date(p.created_at)}</p>${write && !revision ? `<a class="edit-article" href="/wiki/${p.id}/edit/">Edit article</a>` : ""}</div>${revision ? `<nav class="actions" aria-label="Revision navigation">${p.number > 1 ? link(`/wiki/${id}/revision/${p.number - 1}/`, "Previous revision") : ""}${p.number < p.revisionCount ? link(`/wiki/${id}/revision/${p.number + 1}/`, "Next revision") : ""}${link(queryLink(`/wiki/${id}/compare/`, { from: p.number, to: p.revisionCount }), "Compare with current")}</nav>` : `<div class="notice">Latest change: ${escape(p.summary)}${p.number > 1 ? ` · ${link(queryLink(`/wiki/${id}/compare/`, { from: p.number - 1, to: p.number }), "View changes →")}` : ""}</div>`}${toc.length ? `<details class="mobile-toc"><summary>On this page</summary>${tocLinks}</details>` : ""}<article>${await renderMarkdown(p.body)}</article></div><aside class="sidebar">${toc.length ? `<section class="desktop-toc"><h2>On this page</h2>${tocLinks}</section>` : ""}<div class="article-side-links">${related.length ? `<section><h2>Related articles</h2>${list(related.map((p) => link(p.url, p.title)))}</section>` : ""}<section><h2>Linked from</h2>${index.backlinks(id).length ? list(index.backlinks(id).map((p) => link(`/wiki/${p.id}/`, p.title))) : '<p class="muted">No incoming article links yet.</p>'}</section></div></aside></div>`,
     { active: "Topics" },
   );
 }
