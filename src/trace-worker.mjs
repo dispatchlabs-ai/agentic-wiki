@@ -37,7 +37,7 @@ async function renderEvent(event, id, positionByLine) {
         : await renderMarkdown(event.text);
   const body = `${content}<details><summary>Original source record</summary><pre>${escape(JSON.stringify(r, null, 2))}</pre></details>`;
   const heading = `${escape(["user", "assistant"].includes(kind) ? kind : event.label)} · ${link(anchor(line), `line ${line}`)}${event.timestamp != null ? ` · ${escape(event.timestamp)}` : ""}`;
-  return `<section id="line-${line}" class="trace-event">${notice}${!["user", "assistant"].includes(kind) || event.mirrorOf || event.superseded ? `<details><summary>${heading}</summary>${body}</details>` : `<h2>${heading}</h2>${body}`}</section>`;
+  return `<section id="line-${line}" class="trace-event" data-kind="${escape(kind)}">${notice}${!["user", "assistant"].includes(kind) || event.mirrorOf || event.superseded ? `<details><summary>${heading}</summary>${body}</details>` : `<h2>${heading}</h2>${body}`}</section>`;
 }
 async function run({ root, metadata, page }) {
   const filename = path.join(root, metadata.id, "source.jsonl");
@@ -63,7 +63,15 @@ async function run({ root, metadata, page }) {
     header.payload?.history_base;
   const html = shell(
     metadata.title,
-    `<p class="eyebrow">${escape(metadata.format)} trace</p><h1>${escape(metadata.title)}</h1><p>${events.length} source records · ${link("/traces/", "All traces")}</p><p class="meta">Snapshot ${metadata.id}</p>${parent ? '<p class="trace-notice">This session references earlier history. This snapshot displays only records it contains; parent history is not automatically imported.</p>' : ""}<p>Dialogue is expanded. Tools, reasoning, context and duplicate event representations are available below. Original records preserve all recorded fields.</p>${pagination}${(await Promise.all(selected.map((event) => renderEvent(event, metadata.id, positions)))).join("")}${pagination}`,
+    `<p class="breadcrumb">${link("/traces/", "Traces")} / ${escape(metadata.format)}</p><h1>${escape(metadata.title)}</h1><p class="lede">${events.length} source records · ${escape(metadata.format)} conversation</p><div class="layout"><div>${parent ? '<p class="trace-notice">This session references earlier history. This snapshot displays only records it contains; parent history is not automatically imported.</p>' : ""}<div class="tabs" role="group" aria-label="Trace display"><button type="button" data-trace-mode="dialogue" aria-pressed="true">Dialogue</button><button type="button" data-trace-mode="records" aria-pressed="false">Source records</button></div><p class="meta">Dialogue is expanded; tool and context records remain available below.</p>${pagination}${(await Promise.all(selected.map((event) => renderEvent(event, metadata.id, positions)))).join("")}${pagination}</div><aside class="sidebar"><details data-responsive-details open><summary>Conversation details</summary><dl class="trace-details"><dt>Harness</dt><dd>${escape(metadata.format)}</dd><dt>Source records</dt><dd>${events.length}</dd><dt>Snapshot</dt><dd>${escape(metadata.id)}</dd>${metadata.session_id ? `<dt>Session</dt><dd>${escape(metadata.session_id)}</dd>` : ""}</dl></details><section><h2>On this page</h2><ul class="link-list">${selected
+      .filter((ev) => ["user", "assistant"].includes(ev.kind) && !ev.mirrorOf)
+      .slice(0, 20)
+      .map(
+        (ev) =>
+          `<li>${link(`#line-${ev.line}`, `${ev.kind} · line ${ev.line}`)}</li>`,
+      )
+      .join("")}</ul></section><!-- cited-by --></aside></div>`,
+    { active: "Traces" },
   );
   return {
     id: metadata.id,

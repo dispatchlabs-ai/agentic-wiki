@@ -15,6 +15,9 @@ framework is required.
 Codex and pi JSONL traces also render on demand from immutable source snapshots,
 with a bounded worker pool and memory cache. See [trace storage and rendering](docs/traces.md).
 
+The [responsive interface](docs/interface.md) provides mobile and desktop layouts,
+light and dark appearance, revision comparisons, source views, and draft preview.
+
 The engine and content are separate repositories. Each instance reads one content
 repository; it never serves that repository's files directly.
 

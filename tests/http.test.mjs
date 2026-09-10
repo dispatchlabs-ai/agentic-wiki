@@ -366,3 +366,90 @@ test("writer failures carry stable codes and the browser loads shared limits", a
     /export const editSchema/,
   );
 });
+
+test("preview sanitizes without mutating Git and enforces request boundaries", async (t) => {
+  const { request, repo } = await server(t);
+  const head = git(repo, ["rev-parse", "HEAD"]);
+  const options = {
+    method: "POST",
+    headers: { Origin: "http://wiki.test", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      body: "# Draft\n\n<script>alert(1)</script>\n\n[unsafe](javascript:alert(1))",
+    }),
+  };
+  const preview = await request("/api/articles/preview", options);
+  assert.equal(preview.status, 200);
+  const { html } = await preview.json();
+  assert.match(html, /Draft/);
+  assert.doesNotMatch(html, /<script|javascript:/);
+  assert.equal(git(repo, ["rev-parse", "HEAD"]), head);
+  assert.equal(git(repo, ["status", "--porcelain"]), "");
+  assert.equal(
+    (
+      await request("/api/articles/preview", {
+        ...options,
+        headers: { ...options.headers, Origin: "https://other.invalid" },
+      })
+    ).status,
+    403,
+  );
+  for (const body of [
+    "{",
+    "{}",
+    JSON.stringify({ body: "x".repeat(100001) }),
+  ]) {
+    assert.equal(
+      (await request("/api/articles/preview", { ...options, body })).status,
+      400,
+    );
+  }
+  assert.equal(
+    (
+      await request("/api/articles/preview", {
+        ...options,
+        body: "x".repeat(512001),
+      })
+    ).status,
+    413,
+  );
+  const readonly = await server(t, { write: false });
+  assert.equal(
+    (await readonly.request("/api/articles/preview", options)).status,
+    403,
+  );
+});
+
+test("comparison query caches stay separate and deleted articles retain history", async (t) => {
+  const { request, save, repo } = await server(t);
+  const current = await (
+    await request("/api/articles/guide/current.json")
+  ).json();
+  await save({
+    operation_id: "second",
+    updates: [
+      {
+        ...update("guide", "Second body."),
+        expected_revision_id: current.revision_id,
+      },
+    ],
+  });
+  const first = await (
+    await request("/wiki/guide/compare/?from=1&to=1")
+  ).text();
+  const second = await (
+    await request("/wiki/guide/compare/?from=1&to=2")
+  ).text();
+  assert.doesNotMatch(first, /Second body/);
+  assert.match(second, /Second body/);
+  assert.equal((await request("/wiki/guide/compare/?from=nope")).status, 400);
+  assert.equal((await request("/wiki/guide/compare/?to=999")).status, 404);
+  assert.match(
+    await (await request("/wiki/guide/sources/?revision=1")).text(),
+    /https:\/\/example.org\/source/,
+  );
+  git(repo, ["rm", "wiki/guide.md"]);
+  git(repo, ["commit", "-m", "Remove guide"]);
+  assert.equal((await request("/wiki/guide/")).status, 404);
+  assert.equal((await request("/wiki/guide/history/")).status, 200);
+  assert.equal((await request("/wiki/guide/compare/?from=1&to=2")).status, 200);
+});

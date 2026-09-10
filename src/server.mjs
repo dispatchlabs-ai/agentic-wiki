@@ -6,7 +6,17 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { GitWiki, wikiRepo } from "./git-wiki.mjs";
 import { WikiSearch } from "./wiki-search.mjs";
-import { article, shell, escape, link } from "./render.mjs";
+import { article, renderMarkdown, sources, link, list } from "./render.mjs";
+import {
+  home,
+  topics,
+  historyView,
+  compareView,
+  sourcesView,
+  editorView,
+  searchView,
+  tracesView,
+} from "./views.mjs";
 import { TraceStore } from "./traces.mjs";
 import { searchTraces } from "./trace-search.mjs";
 const assetRoot = fileURLToPath(new URL("../public/", import.meta.url));
@@ -54,6 +64,35 @@ export function createWiki({
         return send(403, { error: "Invalid host" });
       const url = new URL(req.url, origin);
       refresh();
+      if (req.method === "POST" && url.pathname === "/api/articles/preview") {
+        if (
+          !write ||
+          req.headers.origin !== origin ||
+          req.headers["content-type"]?.split(";")[0] !== "application/json"
+        )
+          return send(403, { error: "Same-origin enabled writer required" });
+        let size = 0;
+        const chunks = [];
+        for await (const chunk of req) {
+          size += chunk.length;
+          if (size > 512000)
+            return send(413, { error: "Preview exceeds 512 KB" });
+          chunks.push(chunk);
+        }
+        let draft;
+        try {
+          draft = JSON.parse(
+            new TextDecoder("utf-8", { fatal: true }).decode(
+              Buffer.concat(chunks),
+            ),
+          );
+        } catch {
+          return send(400, { error: "Invalid JSON" });
+        }
+        if (typeof draft?.body !== "string" || draft.body.length > 100000)
+          return send(400, { error: "Invalid preview body" });
+        return send(200, { html: await renderMarkdown(draft.body) });
+      }
       if (req.method === "POST" && url.pathname === "/api/articles/edits") {
         if (
           !write ||
@@ -132,6 +171,8 @@ export function createWiki({
         "/assets/edit-contract.js": ["edit-contract.js", "text/javascript"],
         "/assets/client.js": ["client.js", "text/javascript"],
         "/assets/style.css": ["style.css", "text/css"],
+        "/assets/theme.css": ["theme.css", "text/css"],
+        "/assets/theme.js": ["theme.js", "text/javascript"],
       }[url.pathname];
       if (asset)
         return send(
@@ -144,16 +185,17 @@ export function createWiki({
         url.pathname === "/api/traces/catalog.json"
       ) {
         const catalog = traceStore.catalog();
-        return url.pathname.startsWith("/api/")
-          ? send(200, catalog)
-          : send(
-              200,
-              shell(
-                "Traces",
-                `<p class="eyebrow">Source conversations</p><h1>Agent traces</h1>${catalog.length ? catalog.map((t) => `<section><h2>${link(t.url, t.title)}</h2><p>${escape(t.format)} · ${escape(t.records)} source records</p></section>`).join("") : "<p>No traces have been imported.</p>"}`,
-              ),
-              "text/html",
-            );
+        if (url.pathname.startsWith("/api/")) return send(200, catalog);
+        const q = url.searchParams.get("q") || "";
+        const result = searchTraces(traces, q, {
+          offset: Number(url.searchParams.get("offset") || 0),
+          format: url.searchParams.get("format") || "",
+        });
+        return send(
+          200,
+          tracesView(catalog, url.searchParams, result),
+          "text/html",
+        );
       }
       if (url.pathname === "/api/traces/search") {
         try {
@@ -184,7 +226,23 @@ export function createWiki({
             page,
           );
           if (!result) return send(404, { error: "Unknown trace or page" });
-          if (traceRoute[1]) return send(200, result.html, "text/html");
+          if (traceRoute[1]) {
+            const cited = [...wiki.pages.values()].filter((p) =>
+              sources(p).some((s) =>
+                s.url.startsWith(`/traces/${traceRoute[1]}/`),
+              ),
+            );
+            return send(
+              200,
+              result.html.replace(
+                "<!-- cited-by -->",
+                cited.length
+                  ? `<section><h2>Cited by</h2>${list(cited.map((p) => link(`/wiki/${p.id}/`, p.title)))}</section>`
+                  : "",
+              ),
+              "text/html",
+            );
+          }
           const { html, ...data } = result;
           return send(200, data);
         } catch (e) {
@@ -235,12 +293,17 @@ export function createWiki({
           return send(400, { error: e.message });
         }
         if (url.pathname.startsWith("/api/")) return send(200, result);
+        const traceResult = searchTraces(
+          traces,
+          url.searchParams.get("q") || "",
+          {
+            limit: 20,
+            offset: Number(url.searchParams.get("traceOffset") || 0),
+          },
+        );
         return send(
           200,
-          shell(
-            "Search",
-            `<h1>Search results</h1><p>${result.truncated ? "At least " : ""}${result.total} articles</p>${result.articles.map((p) => `<section><h2>${link(p.url, p.title)}</h2><p>${escape(p.snippet)}</p></section>`).join("")}${result.nextOffset !== null ? link(`/search/?q=${encodeURIComponent(url.searchParams.get("q") || "")}&offset=${result.nextOffset}`, "More results") : ""}`,
-          ),
+          searchView(wiki, url.searchParams, result, traceResult),
           "text/html",
         );
       }
@@ -266,52 +329,30 @@ export function createWiki({
             )
           : send(404, { error: "Unknown article or revision" });
       }
-      const key = wiki.head + url.pathname;
+      const key = wiki.head + url.pathname + url.search;
       if (cache.has(key)) return send(200, cache.get(key), "text/html");
       let html;
-      if (url.pathname === "/" || url.pathname === "/wiki/")
-        html = shell(
-          url.pathname === "/wiki/" ? "Articles" : "Home",
-          `${url.pathname === "/wiki/" ? '<p class="eyebrow">Written knowledge</p><h1>Articles</h1><p class="lede">Browse all written pages.</p>' : '<p class="eyebrow">Connected knowledge</p><h1>A place to understand.</h1><p class="lede">Read an article. Follow a connection. Leave a clearer record.</p>'}${wiki
-            .catalog()
-            .sort((a, b) => a.title.localeCompare(b.title))
-            .map(
-              (p) =>
-                `<section><h2>${link(p.url, p.title)}</h2><p>${escape(p.description)}</p></section>`,
-            )
-            .join("")}`,
-        );
+      if (url.pathname === "/") html = home(wiki, url.searchParams);
+      if (url.pathname === "/wiki/") html = topics(wiki, url.searchParams);
       const route = url.pathname.match(
-        /^\/wiki\/([a-z0-9-]+)\/(?:(history|edit)\/|revision\/([1-9][0-9]*|[a-f0-9]{40})\/)?$/,
+        /^\/wiki\/([a-z0-9-]+)\/(?:(history|edit|compare|sources)\/|revision\/([1-9][0-9]*|[a-f0-9]{40})\/)?$/,
       );
       if (route) {
         const [, id, view, rev] = route;
-        if (view === "history" && wiki.history(id).length)
-          html = shell(
-            "History",
-            `<h1>Article history</h1><ol>${wiki
-              .history(id)
-              .slice()
-              .reverse()
-              .map(
-                (h) =>
-                  `<li>${link(h.url, `Revision ${h.number}`)} · ${escape(h.created_at)}<p>${escape(h.summary)}</p></li>`,
-              )
-              .join("")}</ol>`,
-          );
+        if (view === "history") html = historyView(wiki, id);
+        else if (view === "compare")
+          html = await compareView(wiki, id, url.searchParams);
+        else if (view === "sources")
+          html = sourcesView(wiki, id, url.searchParams);
         else if (view === "edit" && wiki.current(id))
-          html = shell(
-            "Edit",
-            write
-              ? `<h1>Edit article</h1><form id="editor" data-id="${id}"><label>Title<input name="title" required maxlength="200"></label><label>Description<input name="description" required maxlength="600"></label><label>Topic<input name="topic" required maxlength="100"></label><label>Markdown<textarea name="body" required maxlength="100000" rows="24"></textarea></label><label>Change summary<input name="summary" required maxlength="1000"></label><button disabled>Save revision</button><p role="status" id="status">Loading current revision…</p></form>`
-              : "<h1>This wiki is read-only</h1>",
-          );
+          html = editorView(wiki.current(id), write);
         else if (!view)
           html = await article(
             wiki,
             index,
             id,
             rev ? (rev.length === 40 ? rev : Number(rev)) : undefined,
+            { write },
           );
       }
       if (!html) return send(404, { error: "Page not found" });
@@ -320,7 +361,10 @@ export function createWiki({
       send(200, html, "text/html");
     } catch (e) {
       console.error(e);
-      if (!res.headersSent) send(500, { error: "Wiki unavailable" });
+      if (!res.headersSent)
+        send(e instanceof WikiError ? e.status : 500, {
+          error: e instanceof WikiError ? e.message : "Wiki unavailable",
+        });
       else res.end();
     }
   });

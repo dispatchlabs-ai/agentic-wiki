@@ -13,6 +13,7 @@ reader snapshot. URLs are relative to the configured origin.
 | `GET /api/articles/ID/history.json`                 | First-parent revision list, oldest first                                                    |
 | `GET /api/articles/ID/NUMBER.json`                  | Historical article                                                                          |
 | `GET /api/articles/ID/COMMIT.json`                  | Historical article at an article-changing commit                                            |
+| `POST /api/articles/preview`                        | Sanitized `{ html }` for a Markdown `{ body }` draft; no Git changes                        |
 | `POST /api/articles/edits`                          | Coordinated revision-checked commit receipt                                                 |
 
 Search accepts literal terms (prefix matching), quoted phrases, an optional exact
@@ -23,8 +24,17 @@ exhaustive count. Empty queries list articles within the same bound. SQL/FTS ope
 are not accepted as executable query syntax.
 
 Human views are `/`, `/search/?q=...`, `/wiki/ID/`, `/wiki/ID/history/`,
-`/wiki/ID/revision/NUMBER/` (or COMMIT), and `/wiki/ID/edit/`. The form edits an
+`/wiki/ID/revision/NUMBER/` (or COMMIT), `/wiki/ID/compare/?from=1&to=2`,
+`/wiki/ID/sources/` (optional `?revision=NUMBER`), and `/wiki/ID/edit/`. The form edits an
 existing page; create pages through the API, WebMCP, or ordinary Git commits.
+
+## Preview a draft
+
+`POST /api/articles/preview` accepts `{ "body": "Markdown" }` and returns
+`{ "html": "sanitized HTML" }`. It requires enabled writing, the configured Origin
+and Host, and JSON content type. The request is limited to 512,000 bytes and the
+Markdown body to 100,000 characters. Preview changes no files, revisions, or
+receipts.
 
 ## Save an article
 

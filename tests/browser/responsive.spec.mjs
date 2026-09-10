@@ -1,0 +1,208 @@
+import { test, expect } from "@playwright/test";
+import { once } from "node:events";
+import net from "node:net";
+import fs from "node:fs";
+import path from "node:path";
+import { createWiki } from "../../src/server.mjs";
+import { fixture, commit } from "../helpers.mjs";
+import { markdown } from "../../src/git-wiki.mjs";
+import { importTrace } from "../../src/traces.mjs";
+import { indexTraces } from "../../src/trace-search.mjs";
+let app, cleanup, base, trace;
+const review = path.resolve(".runtime/responsive-review");
+test.beforeAll(async () => {
+  const repo = fixture({ after: (fn) => (cleanup = fn) });
+  const traces = path.join(repo, ".git/traces");
+  trace = importTrace(
+    traces,
+    new URL("../../examples/traces/pi.jsonl", import.meta.url),
+    "Cedar prototype discussion",
+  );
+  importTrace(
+    traces,
+    new URL("../../examples/traces/codex.jsonl", import.meta.url),
+    "Atlas prototype decision",
+  );
+  indexTraces(traces);
+  const data = {
+    title: "Atlas Labs",
+    description:
+      "Applied research, prototypes, and decisions grounded in evidence.",
+    topic: "Organizations",
+    related: ["cedar"],
+    questions: ["Which prototype should enter the next field trial?"],
+    sources: [
+      {
+        url: `/traces/${trace.id}/?page=1#line-3`,
+        title: "Cedar prototype discussion",
+      },
+    ],
+  };
+  const body = `## Overview\n\nAtlas Labs develops reliable research tools with [[cedar|Cedar Instruments]]. See the [original discussion](/traces/${trace.id}/?page=1#line-3).\n\n## Current work\n\n| Area | Description | Status |\n| --- | --- | --- |\n| Field sensors | Evaluate prototypes under changing conditions | Active |\n| Research notes | Keep findings linked to their evidence | In progress |\n\n## Next steps\n\nReview the prototype results before extending the pilot.\n`;
+  fs.writeFileSync(path.join(repo, "wiki/guide.md"), markdown(data, body));
+  fs.writeFileSync(
+    path.join(repo, "wiki/cedar.md"),
+    markdown(
+      {
+        title: "Cedar Instruments",
+        description: "Environmental sensors and field testing.",
+        topic: "Organizations",
+      },
+      "## Overview\n\nCedar builds prototype sensors. See [[guide|Atlas Labs]].\n",
+    ),
+  );
+  fs.writeFileSync(
+    path.join(repo, "wiki/research.md"),
+    markdown(
+      {
+        title: "Prototype research",
+        description: "The questions behind the next experiment.",
+        topic: "Research",
+      },
+      "## Scope\n\nInvestigate the next prototype with [[guide|Atlas Labs]].\n",
+    ),
+  );
+  commit(repo, "Describe prototype collaboration");
+  fs.writeFileSync(
+    path.join(repo, "wiki/guide.md"),
+    markdown(
+      data,
+      body.replace(
+        "Review the prototype results before extending the pilot.",
+        "Run a limited field pilot and record the results before extending deployment.",
+      ),
+    ),
+  );
+  commit(repo, "Choose a limited pilot with recorded results");
+  const reservation = net.createServer().listen(0, "127.0.0.1");
+  await once(reservation, "listening");
+  const port = reservation.address().port;
+  await new Promise((resolve) => reservation.close(resolve));
+  base = `http://127.0.0.1:${port}`;
+  app = createWiki({ repo, traces, origin: base, write: true }).listen(
+    port,
+    "127.0.0.1",
+  );
+  await once(app, "listening");
+  fs.mkdirSync(review, { recursive: true });
+});
+test.afterAll(async () => {
+  if (app)
+    await new Promise((resolve) => {
+      app.close(resolve);
+      app.closeAllConnections();
+    });
+  cleanup?.();
+});
+test("all responsive views reflow, retain navigation and support both themes", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("pageerror", (err) => errors.push(err.message));
+  const routes = [
+    "/",
+    "/wiki/",
+    "/search/?q=prototype",
+    "/wiki/guide/",
+    "/wiki/guide/history/",
+    "/wiki/guide/compare/?from=2&to=3",
+    "/wiki/guide/revision/2/",
+    "/wiki/guide/sources/",
+    "/traces/",
+    `/traces/${trace.id}/`,
+    "/wiki/guide/edit/",
+  ];
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const theme of ["light", "dark"]) {
+      await page.emulateMedia({ colorScheme: theme });
+      for (let i = 0; i < routes.length; i++) {
+        await page.goto(base + routes[i]);
+        await expect(page.locator("h1")).toBeVisible();
+        await expect(
+          page.getByRole("navigation", { name: "Main navigation" }),
+        ).toBeVisible();
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth + 1,
+          ),
+          `${routes[i]} ${width} ${theme} overflows`,
+        ).toBeTruthy();
+        if (width !== 768 && (theme === "light" || i === 0))
+          await page.screenshot({
+            path: path.join(
+              review,
+              `${width}-${theme}-${String(i).padStart(2, "0")}.png`,
+            ),
+            fullPage: true,
+          });
+      }
+    }
+  }
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(base + "/wiki/guide/");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1,
+    ),
+  ).toBeTruthy();
+  await page.getByLabel("Appearance").selectOption("light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.getByLabel("Appearance").selectOption("system");
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme");
+  expect(errors).toEqual([]);
+});
+test("mobile filters, source anchors and preview preserve useful interactions", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(base + "/wiki/");
+  await page.getByText("Browse topics", { exact: true }).click();
+  await page.getByLabel("Topic", { exact: true }).selectOption("Research");
+  await page.getByRole("button", { name: "Apply filters" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Prototype research" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Cedar Instruments" }),
+  ).toHaveCount(0);
+  await page.goto(base + `/traces/${trace.id}/?page=1#line-3`);
+  await expect(page.locator("#line-3")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Source records", exact: true })
+    .click();
+  await expect(
+    page.getByText("Original source record", { exact: true }).first(),
+  ).toBeVisible();
+  await page.goto(base + "/wiki/guide/edit/");
+  await expect(
+    page.getByRole("button", { name: "Save revision" }),
+  ).toBeEnabled();
+  await page
+    .getByLabel("Markdown", { exact: true })
+    .fill(
+      "## Draft preview\n\nA **safe preview**.\n\n<script>alert('bad')</script>",
+    );
+  await page.getByRole("tab", { name: "Preview", exact: true }).click();
+  await expect(page.locator("#preview-body h2")).toHaveText("Draft preview");
+  await expect(page.locator("#preview-body script")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Write", exact: true }).click();
+  await expect(page.getByLabel("Markdown", { exact: true })).toHaveValue(
+    /Draft preview/,
+  );
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole("tab", { name: "Split", exact: true }).click();
+  await expect(page.getByLabel("Markdown", { exact: true })).toBeVisible();
+  await expect(page.locator("#preview-body")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole("tab", { name: "Write", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await page
+    .getByLabel("Change summary")
+    .fill("Check responsive draft preservation");
+  await page.getByRole("button", { name: "Save revision" }).click();
+  await expect(page.getByRole("status")).toContainText("Saved in Git");
+});

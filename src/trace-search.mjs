@@ -85,8 +85,13 @@ export function indexTraces(root) {
     db.close();
   }
 }
-export function searchTraces(root, query, { limit = 20, offset = 0 } = {}) {
+export function searchTraces(
+  root,
+  query,
+  { limit = 20, offset = 0, format = "" } = {},
+) {
   if (
+    !["", "codex", "pi"].includes(format) ||
     typeof query !== "string" ||
     query.length > 300 ||
     !Number.isInteger(limit) ||
@@ -111,9 +116,15 @@ export function searchTraces(root, query, { limit = 20, offset = 0 } = {}) {
       .prepare(
         `SELECT snapshot AS id, line, page, role, s.title, s.format, s.session_id,
       snippet(dialogue,4,'','',' … ',30) AS snippet FROM dialogue JOIN snapshots s ON s.id=snapshot
-      WHERE dialogue MATCH ? ORDER BY rank, snapshot, line LIMIT ? OFFSET ?`,
+      WHERE dialogue MATCH ? AND (?='' OR s.format=?) ORDER BY rank, snapshot, line LIMIT ? OFFSET ?`,
       )
-      .all(terms.map((t) => `"${t}"*`).join(" AND "), limit + 1, offset);
+      .all(
+        terms.map((t) => `"${t}"*`).join(" AND "),
+        format,
+        format,
+        limit + 1,
+        offset,
+      );
     return {
       indexed: true,
       results: rows.slice(0, limit).map((r) => ({

@@ -154,11 +154,139 @@ if (typeof document !== "undefined") {
       .catch(() => {
         document.documentElement.dataset.webmcp = "unavailable";
       });
+  const appearance = document.querySelector("#appearance");
+  if (appearance) {
+    appearance.value = document.documentElement.dataset.theme || "system";
+    appearance.addEventListener("change", () => {
+      if (appearance.value === "system")
+        delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = appearance.value;
+      try {
+        localStorage.setItem("wiki-appearance", appearance.value);
+      } catch {
+        /* Optional preference storage. */
+      }
+    });
+  }
+  const mobile = matchMedia("(max-width: 760px)");
+  document.querySelectorAll("[data-responsive-details]").forEach((d) => {
+    d.open = !mobile.matches;
+    mobile.addEventListener("change", () => {
+      d.open = !mobile.matches;
+    });
+  });
+  function revealAnchor() {
+    let id;
+    try {
+      id = decodeURIComponent(location.hash.slice(1));
+    } catch {
+      return;
+    }
+    const target = document.getElementById(id);
+    if (!target) return;
+    let ancestor = target.parentElement;
+    while (ancestor) {
+      if (ancestor.tagName === "DETAILS") ancestor.open = true;
+      ancestor = ancestor.parentElement;
+    }
+    if (target.matches(".trace-event")) {
+      const detail = target.querySelector(":scope > details");
+      if (detail) detail.open = true;
+    }
+  }
+  revealAnchor();
+  window.addEventListener("hashchange", revealAnchor);
+  document.querySelectorAll("[data-trace-mode]").forEach((button) =>
+    button.addEventListener("click", () => {
+      const records = button.dataset.traceMode === "records";
+      document
+        .querySelectorAll("[data-trace-mode]")
+        .forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+      document.querySelectorAll(".trace-event details").forEach((d) => {
+        d.open = records;
+      });
+      revealAnchor();
+    }),
+  );
   const form = document.querySelector("#editor");
   if (form) {
     const status = document.querySelector("#status"),
-      button = form.querySelector("button");
-    let current, pending;
+      button = form.querySelector('button[type="submit"]');
+    let current,
+      pending,
+      dirty = false,
+      previewVersion = 0,
+      previewTimer;
+    const panes = form.querySelector(".editor-panes");
+    const modes = [...form.querySelectorAll("[data-editor-mode]")];
+    async function preview() {
+      const version = ++previewVersion;
+      document.querySelector("#preview-title").textContent =
+        form.elements.title.value;
+      document.querySelector("#preview-description").textContent =
+        form.elements.description.value;
+      const previewStatus = document.querySelector("#preview-status");
+      previewStatus.textContent = "Updating preview…";
+      try {
+        const rendered = await request("/api/articles/preview", {
+          body: form.elements.body.value,
+        });
+        if (version !== previewVersion) return;
+        document.querySelector("#preview-body").innerHTML = rendered.html;
+        previewStatus.textContent = "";
+      } catch (error) {
+        if (version === previewVersion)
+          previewStatus.textContent = error.message;
+      }
+    }
+    function setMode(mode) {
+      if (mode === "split" && mobile.matches) mode = "write";
+      panes.dataset.mode = mode;
+      modes.forEach((b) => {
+        b.setAttribute("aria-selected", String(b.dataset.editorMode === mode));
+        b.tabIndex = b.dataset.editorMode === mode ? 0 : -1;
+      });
+      if (mode !== "write") preview();
+    }
+    modes.forEach((b) => {
+      b.addEventListener("click", () => setMode(b.dataset.editorMode));
+      b.addEventListener("keydown", (event) => {
+        const available = modes.filter(
+            (b) => !mobile.matches || b.dataset.editorMode !== "split",
+          ),
+          i = available.indexOf(b);
+        let next;
+        if (event.key === "ArrowRight")
+          next = available[(i + 1) % available.length];
+        if (event.key === "ArrowLeft")
+          next = available[(i + available.length - 1) % available.length];
+        if (event.key === "Home") next = available[0];
+        if (event.key === "End") next = available.at(-1);
+        if (next) {
+          event.preventDefault();
+          setMode(next.dataset.editorMode);
+          next.focus();
+        }
+      });
+    });
+    setMode("write");
+    mobile.addEventListener("change", () => {
+      if (mobile.matches && panes.dataset.mode === "split") setMode("write");
+    });
+    form.addEventListener("input", () => {
+      dirty = true;
+      if (current) status.textContent = "Changes not saved.";
+      if (panes.dataset.mode !== "write") {
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(preview, 250);
+      }
+    });
+    window.addEventListener("beforeunload", (event) => {
+      if (dirty) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    });
     request(`/api/articles/${form.dataset.id}/current.json`)
       .then((page) => {
         current = page;
@@ -172,6 +300,7 @@ if (typeof document !== "undefined") {
       });
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (!current) return;
       button.disabled = true;
       const update = {
         id: current.id,
@@ -188,6 +317,17 @@ if (typeof document !== "undefined") {
         const result = await request("/api/articles/edits", pending);
         current.revision_id = result.articles[0].revision_id;
         pending = null;
+        dirty =
+          JSON.stringify(Object.fromEntries(new FormData(form))) !==
+          JSON.stringify(
+            Object.fromEntries(
+              Object.entries(update).filter(
+                ([key]) => !["id", "expected_revision_id"].includes(key),
+              ),
+            ),
+          );
+        document.querySelector("#editing-revision").textContent =
+          `Editing revision ${result.articles[0].number}`;
         status.textContent = `Saved in Git. Remote: ${result.remote}. Publication: ${result.publication}.`;
       } catch (e) {
         status.textContent = `${e.message}. Your draft remains here. If the article changed, read the current article in another tab and reconcile before reloading.`;
