@@ -192,9 +192,11 @@ export class GitWiki {
     this.head = head;
     return true;
   }
+  /** @returns {import("./contracts.mjs").RevisionRef[]} */
   history(id) {
     return this.histories.get(id) || [];
   }
+  /** @returns {import("./contracts.mjs").ArticleRevision|null} */
   revision(id, number) {
     const ref = this.history(id).find(
       (r) => r.number === number || r.commit === number,
@@ -229,6 +231,7 @@ export class GitWiki {
       url: `/wiki/${page.id}/`,
     };
   }
+  /** @returns {import("./contracts.mjs").ArticleRevision|null} */
   current(id) {
     const page = this.pages.get(id);
     return page ? this.describe(page) : null;

@@ -75,7 +75,8 @@ function describe(record, format) {
 }
 /**
  * Project source records into dialogue/context annotations without changing values.
- * @param {{line: number, value: object}[]} records
+ * @param {import("./contracts.mjs").SourceRecord[]} records
+ * @returns {import("./contracts.mjs").TraceEvent[]}
  * @param {"codex"|"pi"} format
  */
 export function project(records, format) {

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Fixed
+
+- Recreated articles advance their complete revision lifecycle. New durable receipts
+  persist blob IDs; retries preserve those IDs, with fallback for older receipts.
+- Failed trace-search indexes no longer take down article-only search or catalog
+  browsing. Combined HTML search degrades visibly and health reports components.
+- Growing captures group by logical event in search, preserving distinct repeated
+  dialogue and branches, with newest matching representatives and provenance.
+
+### Changed
+
+- Explicit range responses are verified and disk-spooled, streamed with backpressure,
+  and excluded from the rendered cache. Workers calculate page-cache byte sizes.
+- Catalog pages use an independently rebuildable metadata index.
+- Source JavaScript/JSDoc boundary checking is part of `npm run check`.
+- Serving benchmarks include large snapshot catalogs and OS peak RSS.
+
 ### Added
 
 - Session grouping in the trace catalog, with paginated session/snapshot APIs and

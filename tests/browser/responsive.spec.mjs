@@ -238,3 +238,25 @@ test("session groups expose every immutable snapshot on mobile", async ({
   await page.goto(base + "/traces/?view=snapshots");
   await expect(page.locator(".entry")).toHaveCount(3);
 });
+
+test("logical trace hits expose their original snapshot citations", async ({
+  page,
+}) => {
+  await page.goto(base + "/search/?q=prototype&type=traces");
+  const disclosure = page
+    .locator("details")
+    .filter({ has: page.getByText("Seen in 2 snapshots", { exact: true }) })
+    .first();
+  await expect(disclosure).toBeVisible();
+  await disclosure.locator("summary").click();
+  const citation = disclosure.getByRole("link").first();
+  await expect(citation).toHaveAttribute(
+    "href",
+    /\/traces\/[a-f0-9]{64}\/\?page=1#line-\d+/,
+  );
+  await citation.click();
+  await expect(page.locator(locationSafeHash(page.url()))).toBeVisible();
+});
+function locationSafeHash(url) {
+  return new URL(url).hash;
+}

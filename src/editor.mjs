@@ -1,3 +1,4 @@
+// @ts-check
 import { WikiError } from "./errors.mjs";
 import { editSchema } from "../public/edit-contract.js";
 import fs from "node:fs";
@@ -40,6 +41,17 @@ export function saveGitEdits(repo, draft) {
     return {
       ...prior.receipt,
       state: "already-saved",
+      articles: prior.receipt.articles.map((a) => {
+        const revision_id =
+          a.revision_id || wiki.revision(a.id, a.number)?.revision_id;
+        if (typeof revision_id !== "string")
+          throw new WikiError(
+            "INVALID_RECEIPT",
+            "Recorded article revision is unavailable",
+            503,
+          );
+        return { ...a, revision_id };
+      }),
       commit: git(repo, [
         "log",
         "-1",
@@ -113,14 +125,15 @@ export function saveGitEdits(repo, draft) {
     const name = current?.filename || `wiki/${u.id}.md`;
     files[name] = markdown(metadata, u.body);
     proposed.set(u.id, parsePage(files[name], name, null));
+    const revision_id = git(repo, ["hash-object", "--stdin"], {
+      input: files[name],
+    });
     results.push({
       id: u.id,
       number:
-        (current?.number || 0) +
-        Number(
-          git(repo, ["hash-object", "--stdin"], { input: files[name] }) !==
-            current?.revision_id,
-        ),
+        (wiki.history(u.id).at(-1)?.number || 0) +
+        Number(!current || revision_id !== current.revision_id),
+      revision_id,
       url: `/wiki/${u.id}/`,
     });
   }
@@ -131,6 +144,7 @@ export function saveGitEdits(repo, draft) {
           "INVALID_EDIT",
           `Broken article link: ${p.id} -> ${target}`,
         );
+  /** @type {import("../public/edit-contract.js").StoredReceipt} */
   const receipt = {
     operation_id: draft.operation_id,
     state: "saved",
@@ -144,15 +158,7 @@ export function saveGitEdits(repo, draft) {
     files,
     draft.updates.map((u) => u.summary).join("; "),
   );
-  wiki.refresh();
-  return {
-    ...receipt,
-    commit,
-    articles: results.map((a) => ({
-      ...a,
-      revision_id: wiki.current(a.id).revision_id,
-    })),
-  };
+  return { ...receipt, commit };
 }
 
 if (
@@ -166,11 +172,6 @@ if (
       const result = saveGitEdits(repo, draft);
       // Retry also retries a previously failed push. A failed remote never makes
       // the local durable commit disappear or creates a duplicate revision.
-      const wiki = new GitWiki(repo);
-      result.articles = result.articles.map((a) => ({
-        ...a,
-        revision_id: wiki.revision(a.id, a.number).revision_id,
-      }));
       try {
         if (process.env.WIKI_PUSH === "1")
           git(repo, ["push", "origin", "main"], { timeout: 30000 });

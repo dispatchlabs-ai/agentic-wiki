@@ -75,3 +75,26 @@ All 26 core tests passed on Node 24.19.0, 26.6.0 and the existing 26.8.1 runtime
 The Chromium editor smoke test passed on Node 24.19.0 with Playwright 1.62.1:
 module loading, a saved edit, and a second unchanged save retaining revision 2.
 Formatting passed. This browser test does not claim native WebMCP compatibility.
+
+## Correctness and degraded operation — September 10, 2026
+
+Added end-to-end receipt lifecycle and old-receipt compatibility regressions;
+missing/incompatible/corrupt/locked/rebuilt trace-index checks; 25 growing captures
+with logical-group pagination; identical dialogue on distinct branches/events;
+verified-prefix fallback; independent catalog rebuilding and warm reads without
+metadata scans; and disk-spooled large explicit ranges excluded from the page cache.
+`npm run check` now includes source-wide JavaScript/JSDoc type checking and
+compile-time required-field regressions. The final check passed all 45 core tests;
+all five Chromium suites passed, including grouped-hit provenance links.
+
+The serving benchmark now accepts `BENCH_SNAPSHOTS` (default 100), measures cold and
+warm catalog pages plus a full requested range, and reports OS process-lifetime
+peak RSS (`process.resourceUsage().maxRSS`) alongside sampled RSS. Peak includes
+fixture creation and worker threads; it is not isolated per-request memory.
+
+Observed on Linux x86-64 / Node 26.8.1 with 1,000 articles, 201 initial commits,
+1,000 snapshots and a 10,001-record main trace (6,877,813 bytes): cold/warm catalog
+34/11 ms; complete range 784 ms; article read p95 81 ms; event-loop p99 101 ms;
+peak RSS 333 MiB. This larger catalog workload is not directly comparable with
+prior one-snapshot benchmarks. Git refresh remains synchronous; cold rendering
+still parses a complete snapshot. These are measurements, not capacity guarantees.

@@ -1,3 +1,4 @@
+import { indexTraces } from "../src/trace-search.mjs";
 import fs from "node:fs";
 import { importTrace } from "../src/traces.mjs";
 import test from "node:test";
@@ -551,4 +552,156 @@ test("session catalogs and caller-selected evidence are available through HTTP a
     2,
   );
   controller.abort();
+});
+
+test("article lifecycle receipts retain identity through deletion, recreation, retry and subsequent edits", async (t) => {
+  const { repo, save, request } = await server(t);
+  for (const identical of [false, true]) {
+    const id = identical ? "same-recreated" : "changed-recreated";
+    const created = await (
+      await save({ operation_id: id + "-create", updates: [update(id)] })
+    ).json();
+    const content = {
+      ...update(id, "Edited content"),
+      expected_revision_id: created.articles[0].revision_id,
+    };
+    const edited = await (
+      await save({ operation_id: id + "-edit", updates: [content] })
+    ).json();
+    git(repo, ["rm", `wiki/${id}.md`]);
+    git(repo, ["commit", "-m", "Delete article"]);
+    const draft = {
+      operation_id: id + "-recreate",
+      updates: [
+        {
+          ...content,
+          body: identical ? content.body : "Recreated content",
+          expected_revision_id: null,
+        },
+      ],
+    };
+    const response = await save(draft);
+    assert.equal(response.status, 200);
+    const recreated = await response.json();
+    assert.equal(recreated.articles[0].number, 3);
+    assert.equal(
+      recreated.articles[0].revision_id,
+      (await (await request(`/api/articles/${id}/current.json`)).json())
+        .revision_id,
+    );
+    if (identical)
+      assert.equal(
+        recreated.articles[0].revision_id,
+        edited.articles[0].revision_id,
+      );
+    const durable = JSON.parse(
+      git(repo, ["show", `HEAD:.wiki/operations/${draft.operation_id}.json`]),
+    );
+    assert.equal(
+      durable.receipt.articles[0].revision_id,
+      recreated.articles[0].revision_id,
+    );
+    const retry = await (await save(draft)).json();
+    assert.deepEqual(retry.articles, recreated.articles);
+    const later = await save({
+      operation_id: id + "-later",
+      updates: [
+        {
+          ...content,
+          body: "Subsequent edit",
+          expected_revision_id: retry.articles[0].revision_id,
+        },
+      ],
+    });
+    assert.equal(later.status, 200);
+    assert.equal((await later.json()).articles[0].number, 4);
+    assert.deepEqual(
+      (await (await save(draft)).json()).articles,
+      recreated.articles,
+    );
+  }
+});
+
+test("trace index failures degrade component health without taking article search or catalogs down", async (t) => {
+  const repo = fixture(t),
+    traces = path.join(repo, ".git", "traces"),
+    file = path.join(traces, "search.sqlite3");
+  importTrace(
+    traces,
+    new URL("../examples/traces/pi.jsonl", import.meta.url),
+    "Synthetic prototype",
+  );
+  const { request } = await server(t, { repo, traces });
+  const check = async (state) => {
+    assert.equal((await request("/search/?q=guide&type=articles")).status, 200);
+    assert.equal((await request("/traces/")).status, 200);
+    const combined = await request("/search/?q=prototype");
+    assert.equal(combined.status, 200);
+    assert.match(
+      await combined.text(),
+      /Trace dialogue search is not available|Trace search is temporarily unavailable/,
+    );
+    assert.equal(
+      (await request("/search/?q=prototype&type=traces")).status,
+      200,
+    );
+    assert.equal((await request("/traces/?q=prototype")).status, 200);
+    const response = await request("/api/articles/health.json");
+    assert.equal(response.status, 503);
+    const h = await response.json();
+    assert.equal(h.components.articleStorage.state, "ready");
+    assert.equal(h.components.articleIndex.state, "ready");
+    assert.equal(h.components.traceArchive.state, "ready");
+    assert.equal(h.components.traceSearch.state, state);
+  };
+  await check("missing");
+  indexTraces(traces);
+  let db = new DatabaseSync(file);
+  db.exec("UPDATE version SET value=-1");
+  db.close();
+  await check("incompatible");
+  indexTraces(traces);
+  db = new DatabaseSync(file);
+  db.exec("PRAGMA journal_mode=DELETE; BEGIN EXCLUSIVE");
+  try {
+    await check("degraded");
+    assert.equal((await request("/api/traces/search?q=prototype")).status, 503);
+  } finally {
+    db.exec("ROLLBACK");
+    db.close();
+  }
+  fs.writeFileSync(file, "corrupt database");
+  await check("degraded");
+  assert.equal((await request("/api/traces/search?q=prototype")).status, 503);
+  fs.rmSync(file);
+  indexTraces(traces);
+  assert.equal((await request("/api/articles/health.json")).status, 200);
+  assert.ok(
+    (await (await request("/api/traces/search?q=prototype")).json()).results
+      .length,
+  );
+});
+
+test("older durable receipts without blob IDs still resolve their recorded revision", async (t) => {
+  const { repo, save } = await server(t);
+  const draft = { operation_id: "legacy-create", updates: [update("legacy")] };
+  const first = await (await save(draft)).json();
+  const file = path.join(repo, ".wiki/operations/legacy-create.json");
+  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  delete stored.receipt.articles[0].revision_id;
+  fs.writeFileSync(file, JSON.stringify(stored));
+  git(repo, ["add", file]);
+  git(repo, ["commit", "-m", "Synthetic older receipt shape"]);
+  await save({
+    operation_id: "legacy-later",
+    updates: [
+      {
+        ...update("legacy", "New content"),
+        expected_revision_id: first.articles[0].revision_id,
+      },
+    ],
+  });
+  const retry = await save(draft);
+  assert.equal(retry.status, 200);
+  assert.deepEqual((await retry.json()).articles, first.articles);
 });

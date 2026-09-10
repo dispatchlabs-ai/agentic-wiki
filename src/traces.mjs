@@ -1,3 +1,10 @@
+// @ts-check
+import {
+  archiveStamp,
+  recordImport,
+  metadataCatalog,
+} from "./trace-metadata.mjs";
+import os from "node:os";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -24,13 +31,16 @@ export function parseRecords(bytes) {
     return [{ line: index + 1, value }];
   });
 }
+/** @returns {import("./contracts.mjs").Harness} */
 export function detectFormat(records) {
   const first = records[0]?.value;
   if (first?.type === "session_meta") return "codex";
   if (first?.type === "session") return "pi";
   throw new Error("Expected a Codex session_meta or pi session header");
 }
+/** @returns {import("./contracts.mjs").TraceMetadata} */
 export function importTrace(root, source, title) {
+  const before = archiveStamp(root);
   if (fs.statSync(source).size > MAX_TRACE_BYTES)
     throw new Error("Trace exceeds 128 MiB");
   const bytes = fs.readFileSync(source),
@@ -70,9 +80,11 @@ export function importTrace(root, source, title) {
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }
-  return JSON.parse(
+  const result = JSON.parse(
     fs.readFileSync(path.join(target, "metadata.json"), "utf8"),
   );
+  recordImport(root, result, before);
+  return result;
 }
 export class TraceStore {
   constructor(root, { maxBytes = 64 * 1024 * 1024, timeout = 30000 } = {}) {
@@ -87,14 +99,28 @@ export class TraceStore {
     this.renders = 0;
     this.closed = false;
   }
+  health() {
+    if (!this.root) return { state: "disabled" };
+    try {
+      for (const id of fs
+        .readdirSync(this.root)
+        .filter((id) => /^[a-f0-9]{64}$/.test(id))) {
+        if (
+          !this.metadata(id) ||
+          !fs.statSync(path.join(this.root, id, "source.jsonl")).isFile()
+        )
+          throw Error("Trace archive contains an unreadable snapshot");
+      }
+      return { state: "ready" };
+    } catch (e) {
+      return { state: "degraded", error: e.message };
+    }
+  }
   catalog() {
-    if (!this.root || !fs.existsSync(this.root)) return [];
-    return fs
-      .readdirSync(this.root)
-      .filter((id) => /^[a-f0-9]{64}$/.test(id))
-      .map((id) => this.metadata(id))
-      .filter(Boolean)
-      .sort((a, b) => a.title.localeCompare(b.title));
+    return metadataCatalog(this.root);
+  }
+  catalogPage(options, grouped = false) {
+    return metadataCatalog(this.root, options, grouped);
   }
   metadata(id) {
     if (!this.root || !/^[a-f0-9]{64}$/.test(id)) return null;
@@ -123,7 +149,16 @@ export class TraceStore {
       return Promise.resolve(null);
     return this.enqueue(metadata, { page });
   }
-  readLines(id, start, end) {
+  async readLines(id, start, end) {
+    const result = await this.spoolLines(id, start, end);
+    if (!result) return null;
+    try {
+      return JSON.parse(await fs.promises.readFile(result.path, "utf8"));
+    } finally {
+      await fs.promises.rm(result.directory, { recursive: true, force: true });
+    }
+  }
+  spoolLines(id, start, end) {
     if (
       !Number.isSafeInteger(start) ||
       !Number.isSafeInteger(end) ||
@@ -143,7 +178,10 @@ export class TraceStore {
   }
   enqueue(metadata, selection) {
     if (this.closed) return Promise.reject(new Error("Trace store closed"));
-    const key = `${TRACE_VERSION}:${metadata.id}:${JSON.stringify(selection)}`;
+    const key =
+      selection.start !== undefined
+        ? randomUUID()
+        : `${TRACE_VERSION}:${metadata.id}:${JSON.stringify(selection)}`;
     if (this.cache.has(key)) {
       const value = this.cache.get(key);
       this.cache.delete(key);
@@ -163,33 +201,41 @@ export class TraceStore {
   pump() {
     while (!this.closed && this.workers.size < 2 && this.queue.length) {
       const job = this.queue.shift();
+      const directory =
+        job.start !== undefined
+          ? fs.mkdtempSync(path.join(os.tmpdir(), "wiki-trace-range-"))
+          : undefined;
+      /** @type {import("./contracts.mjs").WorkerRequest} */
+      const request = {
+        root: this.root,
+        metadata: job.metadata,
+        page: job.page,
+        start: job.start,
+        end: job.end,
+        directory,
+      };
       const worker = new Worker(
         new URL("./trace-worker.mjs", import.meta.url),
         {
-          workerData: {
-            root: this.root,
-            metadata: job.metadata,
-            page: job.page,
-            start: job.start,
-            end: job.end,
-          },
+          workerData: request,
           resourceLimits: { maxOldGenerationSizeMb: 512 },
         },
       );
       this.workers.add(worker);
       if (job.page) this.renders++;
       let finished = false;
-      const finish = (error, result) => {
+      const finish = (error, result, size = 0) => {
         if (finished) return;
         finished = true;
         clearTimeout(timer);
         this.workers.delete(worker);
         this.pending.delete(job.key);
         void worker.terminate();
+        if (directory && (error || !result))
+          fs.rmSync(directory, { recursive: true, force: true });
         if (error) job.reject(error);
         else {
-          const size = Buffer.byteLength(JSON.stringify(result));
-          if (size <= this.maxBytes) {
+          if (job.page && size <= this.maxBytes) {
             while (
               this.cache.size &&
               (this.bytes + size > this.maxBytes || this.cache.size >= 256)
@@ -209,14 +255,16 @@ export class TraceStore {
         () => finish(new Error("Trace rendering timed out")),
         this.timeout,
       );
-      worker.once("message", (value) =>
-        value.error
-          ? finish(
-              value.code
-                ? new WikiError(value.code, value.error, value.status)
-                : new Error(value.error),
-            )
-          : finish(null, value.result),
+      worker.once(
+        "message",
+        (/** @type {import("./contracts.mjs").WorkerMessage} */ value) =>
+          value.type === "error"
+            ? finish(
+                value.code
+                  ? new WikiError(value.code, value.error, value.status)
+                  : new Error(value.error),
+              )
+            : finish(null, value.result, value.size),
       );
       worker.once("error", (error) => finish(error));
       worker.once("exit", () => finish(new Error("Trace worker stopped")));

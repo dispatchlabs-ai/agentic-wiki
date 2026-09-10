@@ -134,3 +134,30 @@ test("session grouping isolates harnesses and absent identities, retaining all g
     /Invalid/,
   );
 });
+
+test("large explicit ranges are disk-spooled without entering the rendered cache", async (t) => {
+  const body = "x".repeat(4 * 1024 * 1024);
+  const { store, metadata } = archive(
+    t,
+    JSON.stringify({ type: "session", id: "spool" }) +
+      "\n" +
+      JSON.stringify({
+        type: "message",
+        message: { role: "user", content: body },
+      }),
+  );
+  const result = await store.spoolLines(metadata.id, 1, 2);
+  try {
+    assert.equal(result.transport, "file");
+    assert.ok(result.size > 8 * 1024 * 1024);
+    assert.equal(store.cache.size, 0);
+    assert.equal(store.bytes, 0);
+    assert.equal(
+      JSON.parse(fs.readFileSync(result.path, "utf8")).lines[1].value.message
+        .content,
+      body,
+    );
+  } finally {
+    fs.rmSync(result.directory, { recursive: true, force: true });
+  }
+});

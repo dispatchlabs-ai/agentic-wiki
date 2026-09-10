@@ -137,3 +137,12 @@ The additional CI runtime is Node 26.6.0 (August 4), which also satisfies the
 Node 26.8.1 installation.
 Playwright also locks optional macOS-only `fsevents` 2.3.2 (MIT); it is not
 installed in the supported Linux test environment.
+
+## Boundary checking — September 10, 2026
+
+Added development-only TypeScript 5.9.3 (published September 30, 2025) and
+`@types/node` 24.3.0 (August 15, 2025). Both exceed the 30-day CI/tooling soak.
+Versions are pinned exactly; runtime dependencies are unchanged. npm audit found
+zero advisories at installation. Dates were checked against the npm registry:
+[TypeScript metadata](https://registry.npmjs.org/typescript),
+[Node type metadata](https://registry.npmjs.org/@types%2fnode).

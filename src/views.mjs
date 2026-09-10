@@ -191,10 +191,10 @@ export async function compareView(wiki, id, params) {
         .filter((g) => g.before.join("\n").trim() || g.after.join("\n").trim())
         .map(async (g, i) => {
           const cells = await Promise.all(
-            [
+            /** @type {[string[],string,number][]} */ ([
               [g.before, "removed", from],
               [g.after, "added", to],
-            ].map(async ([lines, kind, rev]) => {
+            ]).map(async ([lines, kind, rev]) => {
               const rendered = (await renderMarkdown(lines.join("\n")))
                 .replace(/ id="[^"]*"/g, "")
                 .replace(/href="#/g, `href="/wiki/${id}/revision/${rev}/#`);
@@ -256,6 +256,10 @@ export function editorView(p, write) {
     { active: "Topics" },
   );
 }
+function traceProvenance(hit) {
+  if (!(hit.snapshot_count > 1)) return "";
+  return `<details><summary>Seen in ${hit.snapshot_count} snapshots</summary>${list(hit.provenance.map((p) => link(p.url, `Imported ${date(p.imported_at)} · line ${p.line}`)))}</details>`;
+}
 export function searchView(wiki, params, articles, traces) {
   const q = params.get("q") || "",
     type = ["articles", "traces"].includes(params.get("type"))
@@ -263,7 +267,7 @@ export function searchView(wiki, params, articles, traces) {
       : "all",
     topic = params.get("topic") || "";
   const resultEntry = (p, kind) =>
-    `<section class="entry"><p class="eyebrow">${e(kind)}</p><h2>${link(p.url, p.title)}</h2><p>${e(p.snippet)}</p>${kind === "Article" ? `<p class="meta">${e(p.topic)}</p>` : `<p>${link(p.url, `Open passage · line ${p.line}`)}</p>`}</section>`;
+    `<section class="entry"><p class="eyebrow">${e(kind)}</p><h2>${link(p.url, p.title)}</h2><p>${e(p.snippet)}</p>${kind === "Article" ? `<p class="meta">${e(p.topic)}</p>` : `<p>${link(p.url, `Open passage · line ${p.line}`)}</p>${traceProvenance(p)}`}</section>`;
   return shell(
     "Search",
     `<h1>Search the wiki</h1><form class="search-form" action="/search/" role="search"><label class="sr-only" for="search-query">Search query</label><input id="search-query" name="q" type="search" value="${e(q)}" maxlength="300" placeholder="Search articles and traces"><input type="hidden" name="type" value="${type}"><button>Search</button></form><nav class="tabs" aria-label="Search type">${[
@@ -277,7 +281,7 @@ export function searchView(wiki, params, articles, traces) {
       )
       .join(
         "",
-      )}</nav><div class="layout"><div>${type !== "traces" ? `<h2>Articles</h2><p class="meta">${articles.truncated ? "At least " : ""}${articles.total} matching articles</p>${articles.articles.length ? articles.articles.map((p) => resultEntry(p, "Article")).join("") : empty("No matching articles.")}${articles.nextOffset !== null ? `<p class="pagination">${link(queryLink("/search/", { q, type, topic, offset: articles.nextOffset, traceOffset: params.get("traceOffset") }), "More articles")}</p>` : ""}` : ""}${type !== "articles" ? `<h2>Traces</h2>${!q.trim() ? empty("Enter a search term to find trace dialogue.") : !traces.indexed ? empty("Trace dialogue search is not available for this archive yet.") : traces.results.length ? traces.results.map((p) => resultEntry(p, `${p.format} trace`)).join("") : empty("No matching trace passages.")}${traces.nextOffset !== null ? `<p class="pagination">${link(queryLink("/search/", { q, type, topic, offset: params.get("offset"), traceOffset: traces.nextOffset }), "More trace passages")}</p>` : ""}` : ""}</div><aside class="sidebar"><details data-responsive-details open><summary>Filter results</summary><form class="filter-form" action="/search/"><input type="hidden" name="q" value="${e(q)}"><label>Type<select name="type">${[
+      )}</nav><div class="layout"><div>${type !== "traces" ? `<h2>Articles</h2><p class="meta">${articles.truncated ? "At least " : ""}${articles.total} matching articles</p>${articles.articles.length ? articles.articles.map((p) => resultEntry(p, "Article")).join("") : empty("No matching articles.")}${articles.nextOffset !== null ? `<p class="pagination">${link(queryLink("/search/", { q, type, topic, offset: articles.nextOffset, traceOffset: params.get("traceOffset") }), "More articles")}</p>` : ""}` : ""}${type !== "articles" ? `<h2>Traces</h2>${traces.error ? `<p class="notice warning" role="status">${e(traces.error)}</p>` : !q.trim() ? empty("Enter a search term to find trace dialogue.") : !traces.indexed ? empty("Trace dialogue search is not available for this archive yet.") : traces.results.length ? traces.results.map((p) => resultEntry(p, `${p.format} trace`)).join("") : empty("No matching trace passages.")}${traces.nextOffset !== null ? `<p class="pagination">${link(queryLink("/search/", { q, type, topic, offset: params.get("offset"), traceOffset: traces.nextOffset }), "More trace passages")}</p>` : ""}` : ""}</div><aside class="sidebar"><details data-responsive-details open><summary>Filter results</summary><form class="filter-form" action="/search/"><input type="hidden" name="q" value="${e(q)}"><label>Type<select name="type">${[
       ["all", "All"],
       ["articles", "Articles"],
       ["traces", "Traces"],
@@ -289,7 +293,7 @@ export function searchView(wiki, params, articles, traces) {
     { className: "search-page" },
   );
 }
-export function tracesView(catalog, params, search) {
+export function tracesView(catalog, params, search, catalogResult = null) {
   const q = params.get("q") || "",
     format = ["codex", "pi"].includes(params.get("format"))
       ? params.get("format")
@@ -301,12 +305,20 @@ export function tracesView(catalog, params, search) {
   const sorted = grouped
     ? sessions(catalog, options)
     : sortedSnapshots(catalog, options);
-  const selected = q ? search.results : sorted.slice(offset, offset + 20),
-    next = q
-      ? search.nextOffset
-      : offset + 20 < sorted.length
-        ? offset + 20
-        : null;
+  const selected = q
+      ? search.results
+      : catalogResult
+        ? grouped
+          ? catalogResult.sessions
+          : catalogResult.snapshots
+        : sorted.slice(offset, offset + 20),
+    next = catalogResult
+      ? catalogResult.nextOffset
+      : q
+        ? search.nextOffset
+        : offset + 20 < sorted.length
+          ? offset + 20
+          : null;
   const entry = (item) => {
     const t = grouped ? item.latest : item;
     const snapshotsUrl = queryLink("/traces/", {
@@ -314,11 +326,11 @@ export function tracesView(catalog, params, search) {
       format: t.format,
       session_id: item.session_id,
     });
-    return `<section class="entry"><h2>${link(t.url, t.title)}</h2><p class="meta">${e(t.format)}${grouped ? ` · ${item.snapshot_count} ${item.snapshot_count === 1 ? "snapshot" : "snapshots"} · Latest import ${date(t.imported_at)}` : `${t.records ? ` · ${t.records} source records` : ""}${t.imported_at ? ` · Imported ${date(t.imported_at)}` : ""}`}</p>${grouped && item.session_id ? `<p>${link(snapshotsUrl, "View session snapshots")}</p>` : ""}${t.snippet ? `<p>${e(t.snippet)}</p><p>${link(t.url, `Open passage · line ${t.line}`)}</p>` : ""}</section>`;
+    return `<section class="entry"><h2>${link(t.url, t.title)}</h2><p class="meta">${e(t.format)}${grouped ? ` · ${item.snapshot_count} ${item.snapshot_count === 1 ? "snapshot" : "snapshots"} · Latest import ${date(t.imported_at)}` : `${t.records ? ` · ${t.records} source records` : ""}${t.imported_at ? ` · Imported ${date(t.imported_at)}` : ""}`}</p>${grouped && item.session_id ? `<p>${link(snapshotsUrl, "View session snapshots")}</p>` : ""}${t.snippet ? `<p>${e(t.snippet)}</p><p>${link(t.url, `Open passage · line ${t.line}`)}</p>${traceProvenance(t)}` : ""}</section>`;
   };
   return shell(
     "Traces",
-    `<h1>Agent traces</h1><p class="lede">Original conversations, decisions, and supporting evidence.</p><nav class="tabs" aria-label="Trace catalog view">${link("/traces/", "Sessions")}${link("/traces/?view=snapshots", "All snapshots")}</nav><form class="search-form" action="/traces/" role="search"><label class="sr-only" for="trace-query">Search trace dialogue</label><input id="trace-query" name="q" type="search" value="${e(q)}" maxlength="300" placeholder="Search trace dialogue"><input type="hidden" name="format" value="${format}"><button>Search</button></form><div class="filter-layout"><details class="filter-panel" data-responsive-details open><summary>Filters</summary><form class="filter-form" action="/traces/"><input type="hidden" name="q" value="${e(q)}"><input type="hidden" name="view" value="${grouped ? "sessions" : "snapshots"}">${session_id ? `<input type="hidden" name="session_id" value="${e(session_id)}">` : ""}<label>Harness<select name="format">${option("", "All", format)}${option("codex", "Codex", format)}${option("pi", "pi", format)}</select></label><button>Apply filters</button></form></details><div><p class="meta">${q ? "Matching dialogue passages" : `${sorted.length} ${grouped ? "sessions" : "snapshots"} · Most recently imported first`}</p>${session_id ? `<p>Session: ${e(session_id)}</p>` : ""}${q && !search.indexed ? empty("Trace dialogue search is not available for this archive yet.") : selected.length ? selected.map(entry).join("") : empty(q ? "No matching trace passages." : "No traces have been imported.")}<nav class="pagination" aria-label="Trace pages">${offset > 0 ? link(queryLink("/traces/", { q, format, view: grouped ? "sessions" : "snapshots", session_id, offset: Math.max(0, offset - 20) }), "Previous") : ""}${next !== null ? link(queryLink("/traces/", { q, format, view: grouped ? "sessions" : "snapshots", session_id, offset: next }), "Next") : ""}</nav></div></div>`,
+    `<h1>Agent traces</h1><p class="lede">Original conversations, decisions, and supporting evidence.</p><nav class="tabs" aria-label="Trace catalog view">${link("/traces/", "Sessions")}${link("/traces/?view=snapshots", "All snapshots")}</nav><form class="search-form" action="/traces/" role="search"><label class="sr-only" for="trace-query">Search trace dialogue</label><input id="trace-query" name="q" type="search" value="${e(q)}" maxlength="300" placeholder="Search trace dialogue"><input type="hidden" name="format" value="${format}"><button>Search</button></form><div class="filter-layout"><details class="filter-panel" data-responsive-details open><summary>Filters</summary><form class="filter-form" action="/traces/"><input type="hidden" name="q" value="${e(q)}"><input type="hidden" name="view" value="${grouped ? "sessions" : "snapshots"}">${session_id ? `<input type="hidden" name="session_id" value="${e(session_id)}">` : ""}<label>Harness<select name="format">${option("", "All", format)}${option("codex", "Codex", format)}${option("pi", "pi", format)}</select></label><button>Apply filters</button></form></details><div><p class="meta">${q ? "Matching dialogue passages" : `${catalogResult?.total ?? sorted.length} ${grouped ? "sessions" : "snapshots"} · Most recently imported first`}</p>${session_id ? `<p>Session: ${e(session_id)}</p>` : ""}${search.error ? `<p class="notice warning" role="status">${e(search.error)}</p>` : q && !search.indexed ? empty("Trace dialogue search is not available for this archive yet.") : selected.length ? selected.map(entry).join("") : empty(q ? "No matching trace passages." : "No traces have been imported.")}<nav class="pagination" aria-label="Trace pages">${offset > 0 ? link(queryLink("/traces/", { q, format, view: grouped ? "sessions" : "snapshots", session_id, offset: Math.max(0, offset - 20) }), "Previous") : ""}${next !== null ? link(queryLink("/traces/", { q, format, view: grouped ? "sessions" : "snapshots", session_id, offset: next }), "Next") : ""}</nav></div></div>`,
     { active: "Traces" },
   );
 }

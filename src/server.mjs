@@ -1,3 +1,4 @@
+import { pipeline } from "node:stream/promises";
 import { WikiError } from "./errors.mjs";
 import http from "node:http";
 import fs from "node:fs";
@@ -18,13 +19,8 @@ import {
   tracesView,
 } from "./views.mjs";
 import { TraceStore } from "./traces.mjs";
-import {
-  catalogOptions,
-  catalogPage,
-  sortedSnapshots,
-  sessions,
-} from "./trace-catalog.mjs";
-import { searchTraces } from "./trace-search.mjs";
+import { catalogOptions } from "./trace-catalog.mjs";
+import { searchTraces, traceSearchHealth } from "./trace-search.mjs";
 const assetRoot = fileURLToPath(new URL("../public/", import.meta.url));
 export function createWiki({
   repo = wikiRepo(),
@@ -39,16 +35,39 @@ export function createWiki({
     index = new WikiSearch(database),
     cache = new Map();
   let stats = index.sync(wiki),
-    error = null;
+    error = null,
+    storageError = null,
+    indexError = null;
   function refresh() {
     const previous = { ...wiki };
     try {
       if (wiki.refresh()) cache.clear();
-      stats = index.sync(wiki);
-      error = null;
+      storageError = null;
     } catch (e) {
       Object.assign(wiki, previous);
-      error = e.message;
+      error = storageError = e.message;
+      return;
+    }
+    try {
+      stats = index.sync(wiki);
+      error = indexError = null;
+    } catch (e) {
+      Object.assign(wiki, previous);
+      error = indexError = e.message;
+    }
+  }
+  function htmlTraceSearch(query, options) {
+    try {
+      return searchTraces(traces, query, options);
+    } catch (e) {
+      if (e instanceof WikiError && e.code === "INVALID_SEARCH") throw e;
+      return {
+        indexed: false,
+        results: [],
+        nextOffset: null,
+        error:
+          "Trace search is temporarily unavailable. Original traces remain readable.",
+      };
     }
   }
   const timer = setInterval(refresh, 1000);
@@ -57,12 +76,20 @@ export function createWiki({
     const send = (status, value, type = "application/json") => {
       res.writeHead(status, {
         "Content-Type": `${type}; charset=utf-8`,
+        ...(value?.transport === "file"
+          ? { "Content-Length": value.size }
+          : {}),
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
         "X-Wiki-Commit": wiki.head,
         "Content-Security-Policy":
           "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' https:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
       });
+      if (value?.transport === "file") {
+        return pipeline(fs.createReadStream(value.path), res).finally(() =>
+          fs.promises.rm(value.directory, { recursive: true, force: true }),
+        );
+      }
       res.end(type === "application/json" ? JSON.stringify(value) : value);
     };
     try {
@@ -192,31 +219,38 @@ export function createWiki({
           url.pathname,
         )
       ) {
-        const catalog = traceStore.catalog();
         if (url.pathname.startsWith("/api/")) {
           if (url.pathname.endsWith("catalog.json") && !url.search)
-            return send(200, catalog);
-          const options = catalogOptions(url.searchParams);
-          const grouped = url.pathname.endsWith("sessions.json");
+            return send(200, traceStore.catalog());
           return send(
             200,
-            catalogPage(
-              grouped
-                ? sessions(catalog, options)
-                : sortedSnapshots(catalog, options),
-              options,
-              grouped ? "sessions" : "snapshots",
+            traceStore.catalogPage(
+              catalogOptions(url.searchParams),
+              url.pathname.endsWith("sessions.json"),
             ),
           );
         }
         const q = url.searchParams.get("q") || "";
-        const result = searchTraces(traces, q, {
-          offset: Number(url.searchParams.get("offset") || 0),
-          format: url.searchParams.get("format") || "",
-        });
+        const result = !q.trim()
+          ? { indexed: false, results: [], nextOffset: null }
+          : htmlTraceSearch(q, {
+              offset: Number(url.searchParams.get("offset") || 0),
+              format: url.searchParams.get("format") || "",
+            });
         return send(
           200,
-          tracesView(catalog, url.searchParams, result),
+          tracesView(
+            [],
+            url.searchParams,
+            result,
+            q.trim()
+              ? null
+              : traceStore.catalogPage(
+                  { ...catalogOptions(url.searchParams), limit: 20 },
+                  url.searchParams.get("view") !== "snapshots" &&
+                    !url.searchParams.get("session_id"),
+                ),
+          ),
           "text/html",
         );
       }
@@ -241,15 +275,19 @@ export function createWiki({
       );
       if (linesRoute) {
         try {
-          const result = await traceStore.readLines(
+          const result = await traceStore.spoolLines(
             linesRoute[1],
             Number(url.searchParams.get("start")),
             Number(url.searchParams.get("end")),
           );
           return result
-            ? send(200, result)
+            ? await send(200, result)
             : send(404, { error: "Unknown trace or source range" });
         } catch (e) {
+          if (res.headersSent) {
+            res.destroy();
+            return;
+          }
           return send(e instanceof WikiError ? e.status : 503, {
             error: e.message,
             code: e instanceof WikiError ? e.code : "TRACE_UNAVAILABLE",
@@ -292,15 +330,32 @@ export function createWiki({
           return send(503, { error: e.message });
         }
       }
-      if (url.pathname === "/api/articles/health.json")
-        return send(error ? 503 : 200, {
-          state: error ? "degraded" : "ready",
+      if (url.pathname === "/api/articles/health.json") {
+        const components = {
+          articleStorage: {
+            state: storageError ? "degraded" : "ready",
+            error: storageError,
+          },
+          articleIndex: {
+            state: indexError ? "degraded" : "ready",
+            error: indexError,
+          },
+          traceArchive: traceStore.health(),
+          traceSearch: traceSearchHealth(traces),
+        };
+        const degraded = Object.values(components).some(
+          (c) => !["ready", "disabled"].includes(c.state),
+        );
+        return send(degraded ? 503 : 200, {
+          state: degraded ? "degraded" : "ready",
           commit: wiki.head,
           articles: wiki.pages.size,
           index: stats,
           error,
           write,
+          components,
         });
+      }
       if (url.pathname === "/api/articles/authoring.json")
         return send(200, {
           workflow:
@@ -339,14 +394,13 @@ export function createWiki({
           return send(400, { error: e.message });
         }
         if (url.pathname.startsWith("/api/")) return send(200, result);
-        const traceResult = searchTraces(
-          traces,
-          url.searchParams.get("q") || "",
-          {
-            limit: 20,
-            offset: Number(url.searchParams.get("traceOffset") || 0),
-          },
-        );
+        const traceResult =
+          url.searchParams.get("type") === "articles"
+            ? { indexed: false, results: [], nextOffset: null }
+            : htmlTraceSearch(url.searchParams.get("q") || "", {
+                limit: 20,
+                offset: Number(url.searchParams.get("traceOffset") || 0),
+              });
         return send(
           200,
           searchView(wiki, url.searchParams, result, traceResult),

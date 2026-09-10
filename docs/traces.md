@@ -19,9 +19,9 @@ or their metadata in place. There is no remote archive synchronization yet.
 
 ## On-demand rendering
 
-The catalog reads small metadata files. Opening a trace starts a worker that checks
+The catalog queries an independent SQLite metadata projection. Opening a trace starts a worker that checks
 the source SHA-256, parses the original records and renders the requested page.
-There are no generated conversation JSON or HTML files. Rendered results live in a
+There are no prebuilt conversation pages. Rendered results live in a
 64 MiB / 256-entry LRU cache keyed by parser version, snapshot hash and page. Concurrent
 requests for the same page share work. Two workers run at once, with a queue of 32,
 a 30-second deadline and a 512 MiB worker heap limit. Each page contains at most 100
@@ -94,7 +94,14 @@ with filter/pagination arguments returns the paginated envelope.
 Catalogs order by import time descending with snapshot ID as a deterministic tie
 breaker. Pagination is over the currently imported archive; concurrent imports can
 move entries between pages. Every original snapshot URL and citation stays valid.
-These response limits do not eliminate the existing metadata scan of the archive.
+Catalog pagination uses `.metadata/catalog.sqlite3`, independently of dialogue
+search. The first catalog read builds it from immutable metadata; imports update it,
+and a change to the archive directory triggers reconciliation. A corrupt or
+incompatible catalog projection rebuilds automatically. Warm paginated requests
+query the projection and do not read each snapshot’s metadata file. Rebuilding and
+explicit archive health checks still scan the archive. Do not edit metadata in place.
+The archive root must be writable to maintain disposable indexes. The no-query
+legacy catalog API still returns the full collection for compatibility.
 
 ## Original source-line ranges
 
@@ -113,11 +120,18 @@ Complete selected records are returned without truncation. The agent harness own
 context and output management. Invalid bounds return 400; missing snapshots or
 ranges return 404; integrity failures or worker saturation return 503.
 
-Reads share the bounded worker queue and cache with page reads. A cold read streams
-and hashes the complete immutable source to verify its snapshot ID, but retains
-only selected lines and parses only their JSON. It does not project dialogue or
-render Markdown/HTML. Memory and response size scale with the caller’s selection.
-This is not a random-access disk read and does not eliminate full-source integrity I/O.
+Range reads share the worker queue but never enter the rendered-page cache. A worker
+streams the immutable source into a private temporary file while verifying its
+SHA-256. Only after verification does it prepare the requested JSON response on
+disk, preserving complete `raw` and `value` fields without building a full result
+object. The HTTP server streams that response with backpressure; temporary files
+are removed on completion or disconnect. Worker failures also remove the spool.
+A hard process/host crash can leave temporary files for normal temporary-directory
+cleanup. This uses temporary disk space proportional to the source and requested
+response, not an agent context cap. It does not eliminate full-source integrity I/O.
+The internal `readLines` convenience method materializes JSON for in-process callers;
+HTTP uses the streaming `spoolLines` path. Rendered-page cache sizes are calculated
+inside workers, never by stringifying the result again on the server thread.
 
 ## Dialogue search
 
@@ -136,4 +150,39 @@ to 300 characters and 30 terms. Limits are 1–40 and offsets 0–10,000. Follow
 Search reflects the last successful indexing run. It includes user/assistant text,
 including alternate branches, but excludes marked mirrors, superseded entries,
 tools, thinking, and model-context records. Original records remain available in
-the trace reader. Snapshots of a growing session remain distinct results.
+the trace reader.
+
+Results paginate logical events, not snapshot rows. Identity uses a harness-native
+event ID within `(format, session_id)` where available (pi entry IDs; supported
+Codex response/completed-item IDs). Otherwise, byte-identical prefixes from the
+start of verified snapshots through the record establish shared lineage. Matching
+text alone is never an identity. Missing session IDs stay snapshot-local. Repeated
+identical messages with distinct event IDs, positions or divergent branches remain
+distinct. Each hit uses the newest matching capture by import time, with a stable
+snapshot-ID tie breaker, and returns `logical_key`, `snapshot_count`, and
+`provenance` entries containing original snapshot IDs, import times and citation
+URLs. Provenance includes other indexed captures of that event, even when their
+text did not match the query. Original snapshots and records are never removed.
+Search schema version 2 requires a rebuild of older dialogue indexes; running the
+indexing command migrates compatible SQLite files transactionally. Corrupt files
+must be removed/rebuilt while no index writer is running.
+
+## Degraded operation
+
+Article-only HTML search never opens the trace index. Catalog browsing without a
+query does not search dialogue. Combined/trace HTML searches catch derivative-index
+failures and show an availability notice while preserving article results and
+original-trace access. `/api/traces/search` returns 503 for corrupt or locked
+indexes; absent or incompatible indexes retain the `indexed: false` response.
+
+`/api/articles/health.json` includes independent `articleStorage`, `articleIndex`,
+`traceArchive`, and `traceSearch` components. Disabled traces do not degrade health;
+a configured missing/incompatible/unreadable trace search index does. Overall health
+returns 503 when a configured component is degraded, even if article reads work.
+A successful rebuild restores readiness without restarting. Archive health checks
+metadata/source-file availability; cryptographic verification happens on cold reads.
+
+The authoritative archive remains recoverable, but archive durability alone does
+not prove service correctness or production suitability. These regression fixes
+cover receipt identity, degraded availability and snapshot-aware retrieval; they
+are not a general production-readiness guarantee.

@@ -35,14 +35,24 @@ context; change `TRACE_VERSION` when projection or index interpretation changes.
 
 ## Small contributions with clear completion criteria
 
-1. **Reduce catalog scans.** Benchmark a rebuildable metadata index behind existing
-   paginated snapshot/session APIs; preserve import ordering and snapshot URLs.
-2. **Reduce cold range I/O.** Explore verified line-offset indexes for bounded source
-   reads without weakening integrity checks or changing physical line citations.
-3. **Reduce cold trace work.** Benchmark a rebuildable line-offset index against
-   `npm run benchmark:serve`; preserve integrity checks and exact source anchors.
-4. **Broaden format compatibility.** Add one documented synthetic format variant
-   at a time using the fixture rules above.
+1. **Receipt correctness.** Preserve blob IDs and lifecycle numbering across edits,
+   deletion/recreation and retries; include an end-to-end regression for any change.
+2. **Degraded operation.** Keep independent components usable when a derivative
+   fails, expose component health, and prove recovery after rebuilding.
+3. **Search grouping.** Preserve native identity and verified lineage; never merge
+   repeated dialogue solely by text. Test branches, revisions and pagination.
+4. **Resource bounds.** Measure cold-page work, spool disk use, large catalogs and
+   OS peak RSS. Preserve full explicit reads and integrity checks; the harness owns
+   context management. Avoid unverified data reaching a response.
+5. **Additional format support.** Add one documented synthetic format variant at
+   a time using the fixture rules above.
+
+`npm run typecheck` checks JavaScript/JSDoc across `src/` and the shared edit
+contract. `src/contracts.mjs` describes revision, trace metadata, search and worker
+boundaries. Newly persisted receipts require `revision_id`; legacy receipt shapes
+remain separately represented. Compile-time regression fixtures prevent accidentally
+making required fields optional. This is incremental boundary checking, not a claim
+that every arbitrary upstream payload has a fully closed schema.
 
 Discuss interface changes before implementation. Keep a contribution focused on one
 behavior, run `npm run check`, and include the specific regression or benchmark

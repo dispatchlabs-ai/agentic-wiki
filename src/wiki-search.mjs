@@ -140,9 +140,10 @@ export class WikiSearch {
         .all(match, topic, topic, state, state);
       rows.sort(
         (a, b) =>
-          Number(b.title.toLowerCase() === query.trim().toLowerCase()) -
-            Number(a.title.toLowerCase() === query.trim().toLowerCase()) ||
-          a.score - b.score,
+          Number(String(b.title).toLowerCase() === query.trim().toLowerCase()) -
+            Number(
+              String(a.title).toLowerCase() === query.trim().toLowerCase(),
+            ) || Number(a.score) - Number(b.score),
       );
     } else {
       rows = this.db

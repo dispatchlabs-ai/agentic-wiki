@@ -28,6 +28,10 @@ Human views are `/`, `/search/?q=...`, `/wiki/ID/`, `/wiki/ID/history/`,
 `/wiki/ID/sources/` (optional `?revision=NUMBER`), and `/wiki/ID/edit/`. The form edits an
 existing page; create pages through the API, WebMCP, or ordinary Git commits.
 
+Health also reports article storage/index and trace archive/search components.
+A configured unavailable trace index degrades overall health without preventing
+article-only search or original trace/catalog reads. See [trace health and recovery](traces.md#degraded-operation).
+
 ## Preview a draft
 
 `POST /api/articles/preview` accepts `{ "body": "Markdown" }` and returns
@@ -108,7 +112,13 @@ A receipt separates three outcomes:
 `push-failed`; a failed push does not undo the local commit. `publication` is `live`
 or `refresh-failed` and is only returned by HTTP. A successful retry can return an
 older receipt while the current article has moved on; read current again before
-starting another edit. `revision_id` identifies the full Markdown blob, including
+starting another edit. New durable operation receipts persist each article’s exact
+`revision_id`; retries reuse it even after later edits or deletion. Older receipts
+without that field resolve their historical numbered revision. Recreation advances
+the article’s complete historical lifecycle, including when the new bytes equal
+its last pre-deletion revision.
+
+`revision_id` identifies the full Markdown blob, including
 metadata, rather than a global repository commit. An update producing identical
 Markdown bytes succeeds with the existing article revision. Its operation receipt
 is still committed; mixed batches advance only articles whose bytes change.

@@ -15,10 +15,11 @@ const repo = path.join(root, "content"),
 const count = Number(process.env.BENCH_ARTICLES || 200);
 const history = Number(process.env.BENCH_COMMITS || 50);
 const records = Number(process.env.BENCH_RECORDS || 2000);
+const snapshots = Number(process.env.BENCH_SNAPSHOTS || 100);
 const delay = monitorEventLoopDelay({ resolution: 10 });
 let app;
 try {
-  for (const n of [count, history, records])
+  for (const n of [count, history, records, snapshots])
     if (!Number.isSafeInteger(n) || n < 1)
       throw Error("Benchmark sizes must be positive integers");
   fs.mkdirSync(path.join(repo, "wiki"), { recursive: true });
@@ -59,6 +60,20 @@ try {
       .join("\n"),
   );
   const trace = importTrace(traces, source, "Synthetic performance trace");
+  const catalogSource = path.join(root, "catalog-source.jsonl");
+  for (let i = 1; i < snapshots; i++) {
+    fs.writeFileSync(
+      catalogSource,
+      JSON.stringify({ type: "session", id: `catalog-${i}` }) +
+        "\n" +
+        JSON.stringify({
+          type: "message",
+          id: "first",
+          message: { role: "user", content: "Catalog benchmark evidence" },
+        }),
+    );
+    importTrace(traces, catalogSource, `Catalog ${i}`);
+  }
   indexTraces(traces);
   const start = performance.now();
   app = createWiki({
@@ -94,6 +109,11 @@ try {
   delay.enable();
   const coldTraceMs = await request(`/traces/${trace.id}/`);
   const warmTraceMs = await request(`/traces/${trace.id}/`);
+  const coldCatalogMs = await request("/api/traces/sessions.json?limit=20");
+  const warmCatalogMs = await request("/api/traces/sessions.json?limit=20");
+  const rangeMs = await request(
+    `/api/traces/${trace.id}/lines.json?start=1&end=${records + 1}`,
+  );
   const searchMs = await request("/api/traces/search?q=prototype");
   const samples = [];
   for (let i = 0; i < 10; i++) {
@@ -112,6 +132,11 @@ try {
         articles: count,
         historyCommits: history + 1,
         traceRecords: records + 1,
+        snapshots,
+        coldCatalogMs,
+        warmCatalogMs,
+        rangeMs,
+        peakRssMiB: process.resourceUsage().maxRSS / 1024,
         traceBytes: fs.statSync(source).size,
         startupMs,
         coldTraceMs,
@@ -124,7 +149,7 @@ try {
         eventLoopP99Ms: delay.percentile(99) / 1e6,
         sampledRssMiB: process.memoryUsage().rss / 1024 / 1024,
         scope:
-          "Same-process HTTP client/server; includes Git refresh and rendering. RSS is sampled, not peak. Synthetic fixtures; not a capacity guarantee.",
+          "Same-process HTTP client/server; includes Git refresh and rendering. Peak RSS is process-lifetime OS high-water RSS, including fixture setup and workers; sampled RSS is also reported. Synthetic fixtures; not a capacity guarantee.",
       },
       null,
       2,

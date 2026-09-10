@@ -1,5 +1,6 @@
+// @ts-check
 import { WikiError } from "./errors.mjs";
-import { readTraceLines } from "./trace-lines.mjs";
+import { spoolTraceLines } from "./trace-lines.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { parentPort, workerData } from "node:worker_threads";
@@ -41,8 +42,11 @@ async function renderEvent(event, id, positionByLine) {
   const heading = `${escape(["user", "assistant"].includes(kind) ? kind : event.label)} · ${link(anchor(line), `line ${line}`)}${event.timestamp != null ? ` · ${escape(event.timestamp)}` : ""}`;
   return `<section id="line-${line}" class="trace-event" data-kind="${escape(kind)}">${notice}${!["user", "assistant"].includes(kind) || event.mirrorOf || event.superseded ? `<details><summary>${heading}</summary>${body}</details>` : `<h2>${heading}</h2>${body}`}</section>`;
 }
-async function run({ root, metadata, page, start, end }) {
-  if (start !== undefined) return readTraceLines(root, metadata, start, end);
+/** @param {import("./contracts.mjs").WorkerRequest} request
+ * @returns {Promise<import("./contracts.mjs").RenderedTrace|import("./contracts.mjs").SpoolResult|null>} */
+async function run({ root, metadata, page, start, end, directory }) {
+  if (start !== undefined)
+    return spoolTraceLines(root, metadata, start, end, directory);
   const filename = path.join(root, metadata.id, "source.jsonl");
   if (fs.statSync(filename).size > MAX_TRACE_BYTES)
     throw new Error("Trace exceeds 128 MiB");
@@ -86,11 +90,24 @@ async function run({ root, metadata, page, start, end }) {
     html,
   };
 }
+/** @param {import("./contracts.mjs").WorkerMessage} message */
+function reply(message) {
+  parentPort.postMessage(message);
+}
 if (parentPort)
   run(workerData).then(
-    (result) => parentPort.postMessage({ result }),
+    (result) =>
+      reply({
+        type: "result",
+        result,
+        size:
+          result && "transport" in result
+            ? 0
+            : Buffer.byteLength(JSON.stringify(result)),
+      }),
     (error) =>
-      parentPort.postMessage({
+      reply({
+        type: "error",
         error: error.message,
         code: error instanceof WikiError ? error.code : undefined,
         status: error instanceof WikiError ? error.status : undefined,
