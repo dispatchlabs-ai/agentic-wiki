@@ -1,3 +1,4 @@
+import { catalogOptions, sortedSnapshots, sessions } from "./trace-catalog.mjs";
 import {
   shell,
   escape as e,
@@ -293,21 +294,31 @@ export function tracesView(catalog, params, search) {
     format = ["codex", "pi"].includes(params.get("format"))
       ? params.get("format")
       : "";
-  const offset = Number(params.get("offset") || 0);
-  if (!Number.isSafeInteger(offset) || offset < 0 || offset > 10000)
-    throw new WikiError("INVALID_PAGE", "Invalid trace offset");
-  const sorted = catalog
-    .filter((t) => !format || t.format === format)
-    .sort((a, b) => String(b.imported_at).localeCompare(String(a.imported_at)));
+  const options = catalogOptions(params),
+    { offset } = options;
+  const session_id = options.session_id;
+  const grouped = !q && params.get("view") !== "snapshots" && !session_id;
+  const sorted = grouped
+    ? sessions(catalog, options)
+    : sortedSnapshots(catalog, options);
   const selected = q ? search.results : sorted.slice(offset, offset + 20),
     next = q
       ? search.nextOffset
       : offset + 20 < sorted.length
         ? offset + 20
         : null;
+  const entry = (item) => {
+    const t = grouped ? item.latest : item;
+    const snapshotsUrl = queryLink("/traces/", {
+      view: "snapshots",
+      format: t.format,
+      session_id: item.session_id,
+    });
+    return `<section class="entry"><h2>${link(t.url, t.title)}</h2><p class="meta">${e(t.format)}${grouped ? ` · ${item.snapshot_count} ${item.snapshot_count === 1 ? "snapshot" : "snapshots"} · Latest import ${date(t.imported_at)}` : `${t.records ? ` · ${t.records} source records` : ""}${t.imported_at ? ` · Imported ${date(t.imported_at)}` : ""}`}</p>${grouped && item.session_id ? `<p>${link(snapshotsUrl, "View session snapshots")}</p>` : ""}${t.snippet ? `<p>${e(t.snippet)}</p><p>${link(t.url, `Open passage · line ${t.line}`)}</p>` : ""}</section>`;
+  };
   return shell(
     "Traces",
-    `<h1>Agent traces</h1><p class="lede">Original conversations, decisions, and supporting evidence.</p><form class="search-form" action="/traces/" role="search"><label class="sr-only" for="trace-query">Search trace dialogue</label><input id="trace-query" name="q" type="search" value="${e(q)}" maxlength="300" placeholder="Search trace dialogue"><input type="hidden" name="format" value="${format}"><button>Search</button></form><div class="filter-layout"><details class="filter-panel" data-responsive-details open><summary>Filters</summary><form class="filter-form" action="/traces/"><input type="hidden" name="q" value="${e(q)}"><label>Harness<select name="format">${option("", "All", format)}${option("codex", "Codex", format)}${option("pi", "pi", format)}</select></label><button>Apply filters</button></form></details><div><p class="meta">${q ? "Matching dialogue passages" : `${sorted.length} traces · Most recently imported first`}</p>${q && !search.indexed ? empty("Trace dialogue search is not available for this archive yet.") : selected.length ? selected.map((t) => `<section class="entry"><h2>${link(t.url, t.title)}</h2><p class="meta">${e(t.format)}${t.records ? ` · ${t.records} source records` : ""}${t.imported_at ? ` · Imported ${date(t.imported_at)}` : ""}</p>${t.snippet ? `<p>${e(t.snippet)}</p><p>${link(t.url, `Open passage · line ${t.line}`)}</p>` : ""}</section>`).join("") : empty(q ? "No matching trace passages." : "No traces have been imported.")}<nav class="pagination" aria-label="Trace pages">${offset > 0 ? link(queryLink("/traces/", { q, format, offset: Math.max(0, offset - 20) }), "Previous") : ""}${next !== null ? link(queryLink("/traces/", { q, format, offset: next }), "Next") : ""}</nav></div></div>`,
+    `<h1>Agent traces</h1><p class="lede">Original conversations, decisions, and supporting evidence.</p><nav class="tabs" aria-label="Trace catalog view">${link("/traces/", "Sessions")}${link("/traces/?view=snapshots", "All snapshots")}</nav><form class="search-form" action="/traces/" role="search"><label class="sr-only" for="trace-query">Search trace dialogue</label><input id="trace-query" name="q" type="search" value="${e(q)}" maxlength="300" placeholder="Search trace dialogue"><input type="hidden" name="format" value="${format}"><button>Search</button></form><div class="filter-layout"><details class="filter-panel" data-responsive-details open><summary>Filters</summary><form class="filter-form" action="/traces/"><input type="hidden" name="q" value="${e(q)}"><input type="hidden" name="view" value="${grouped ? "sessions" : "snapshots"}">${session_id ? `<input type="hidden" name="session_id" value="${e(session_id)}">` : ""}<label>Harness<select name="format">${option("", "All", format)}${option("codex", "Codex", format)}${option("pi", "pi", format)}</select></label><button>Apply filters</button></form></details><div><p class="meta">${q ? "Matching dialogue passages" : `${sorted.length} ${grouped ? "sessions" : "snapshots"} · Most recently imported first`}</p>${session_id ? `<p>Session: ${e(session_id)}</p>` : ""}${q && !search.indexed ? empty("Trace dialogue search is not available for this archive yet.") : selected.length ? selected.map(entry).join("") : empty(q ? "No matching trace passages." : "No traces have been imported.")}<nav class="pagination" aria-label="Trace pages">${offset > 0 ? link(queryLink("/traces/", { q, format, view: grouped ? "sessions" : "snapshots", session_id, offset: Math.max(0, offset - 20) }), "Previous") : ""}${next !== null ? link(queryLink("/traces/", { q, format, view: grouped ? "sessions" : "snapshots", session_id, offset: next }), "Next") : ""}</nav></div></div>`,
     { active: "Traces" },
   );
 }

@@ -23,6 +23,21 @@ test.beforeAll(async () => {
     new URL("../../examples/traces/codex.jsonl", import.meta.url),
     "Atlas prototype decision",
   );
+  const growing = path.join(repo, ".git", "growing-pi.jsonl");
+  fs.writeFileSync(
+    growing,
+    fs.readFileSync(
+      new URL("../../examples/traces/pi.jsonl", import.meta.url),
+      "utf8",
+    ) +
+      "\n" +
+      JSON.stringify({
+        type: "message",
+        id: "new-record",
+        message: { role: "user", content: "New evidence in a later capture." },
+      }),
+  );
+  importTrace(traces, growing, "Cedar later capture");
   indexTraces(traces);
   const data = {
     title: "Atlas Labs",
@@ -205,4 +220,21 @@ test("mobile filters, source anchors and preview preserve useful interactions", 
     .fill("Check responsive draft preservation");
   await page.getByRole("button", { name: "Save revision" }).click();
   await expect(page.getByRole("status")).toContainText("Saved in Git");
+});
+
+test("session groups expose every immutable snapshot on mobile", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(base + "/traces/");
+  const group = page.locator(".entry").filter({ hasText: "2 snapshots" });
+  await expect(group).toHaveCount(1);
+  await group.getByRole("link", { name: "View session snapshots" }).click();
+  await expect(page.locator(".entry")).toHaveCount(2);
+  await page
+    .getByRole("link", { name: "Cedar prototype discussion", exact: true })
+    .click();
+  await expect(page.locator("#line-3")).toHaveCount(1);
+  await page.goto(base + "/traces/?view=snapshots");
+  await expect(page.locator(".entry")).toHaveCount(3);
 });

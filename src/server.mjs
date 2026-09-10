@@ -18,6 +18,12 @@ import {
   tracesView,
 } from "./views.mjs";
 import { TraceStore } from "./traces.mjs";
+import {
+  catalogOptions,
+  catalogPage,
+  sortedSnapshots,
+  sessions,
+} from "./trace-catalog.mjs";
 import { searchTraces } from "./trace-search.mjs";
 const assetRoot = fileURLToPath(new URL("../public/", import.meta.url));
 export function createWiki({
@@ -182,10 +188,27 @@ export function createWiki({
         );
       if (
         url.pathname === "/traces/" ||
-        url.pathname === "/api/traces/catalog.json"
+        ["/api/traces/catalog.json", "/api/traces/sessions.json"].includes(
+          url.pathname,
+        )
       ) {
         const catalog = traceStore.catalog();
-        if (url.pathname.startsWith("/api/")) return send(200, catalog);
+        if (url.pathname.startsWith("/api/")) {
+          if (url.pathname.endsWith("catalog.json") && !url.search)
+            return send(200, catalog);
+          const options = catalogOptions(url.searchParams);
+          const grouped = url.pathname.endsWith("sessions.json");
+          return send(
+            200,
+            catalogPage(
+              grouped
+                ? sessions(catalog, options)
+                : sortedSnapshots(catalog, options),
+              options,
+              grouped ? "sessions" : "snapshots",
+            ),
+          );
+        }
         const q = url.searchParams.get("q") || "";
         const result = searchTraces(traces, q, {
           offset: Number(url.searchParams.get("offset") || 0),
@@ -210,6 +233,26 @@ export function createWiki({
           return send(e instanceof WikiError ? e.status : 503, {
             error: e.message,
             code: e instanceof WikiError ? e.code : "SEARCH_UNAVAILABLE",
+          });
+        }
+      }
+      const linesRoute = url.pathname.match(
+        /^\/api\/traces\/([a-f0-9]{64})\/lines\.json$/,
+      );
+      if (linesRoute) {
+        try {
+          const result = await traceStore.readLines(
+            linesRoute[1],
+            Number(url.searchParams.get("start")),
+            Number(url.searchParams.get("end")),
+          );
+          return result
+            ? send(200, result)
+            : send(404, { error: "Unknown trace or source range" });
+        } catch (e) {
+          return send(e instanceof WikiError ? e.status : 503, {
+            error: e.message,
+            code: e instanceof WikiError ? e.code : "TRACE_UNAVAILABLE",
           });
         }
       }
@@ -268,6 +311,9 @@ export function createWiki({
             "wiki.search",
             "wiki.read",
             "wiki.history",
+            "wiki.traceSearch",
+            "wiki.traceSessions",
+            "wiki.traceLines",
             "wiki.traces",
             "wiki.trace",
             ...(write ? ["wiki.save"] : []),

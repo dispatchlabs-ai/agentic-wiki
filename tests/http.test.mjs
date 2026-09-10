@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { importTrace } from "../src/traces.mjs";
 import test from "node:test";
 import http from "node:http";
@@ -223,6 +224,8 @@ test("WebMCP registers discoverable schemas and invokes the underlying HTTP API"
       "wiki.read",
       "wiki.history",
       "wiki.traceSearch",
+      "wiki.traceSessions",
+      "wiki.traceLines",
       "wiki.traces",
       "wiki.trace",
       "wiki.save",
@@ -237,6 +240,8 @@ test("WebMCP registers discoverable schemas and invokes the underlying HTTP API"
   );
   const traceSearch = registered.find(
     (r) => r.tool.name === "wiki.traceSearch",
+    "wiki.traceSessions",
+    "wiki.traceLines",
   ).tool;
   assert.equal((await traceSearch.execute({ q: "prototype" })).indexed, false);
   assert.equal((await request("/api/traces/search?q=x&limit=99")).status, 400);
@@ -244,7 +249,7 @@ test("WebMCP registers discoverable schemas and invokes the underlying HTTP API"
   assert.ok(registered.every((r) => r.options.signal.aborted));
   const readonly = [];
   await registerTools({ registerTool: (t) => readonly.push(t) }, false);
-  assert.equal(readonly.length, 6);
+  assert.equal(readonly.length, 8);
 });
 
 test("failed index transactions keep reader and search on one snapshot, then recover", async (t) => {
@@ -452,4 +457,98 @@ test("comparison query caches stay separate and deleted articles retain history"
   assert.equal((await request("/wiki/guide/")).status, 404);
   assert.equal((await request("/wiki/guide/history/")).status, 200);
   assert.equal((await request("/wiki/guide/compare/?from=1&to=2")).status, 200);
+});
+
+test("session catalogs and bounded evidence are available through HTTP and WebMCP", async (t) => {
+  const repo = fixture(t),
+    traces = path.join(repo, ".git", "traces"),
+    source = path.join(repo, ".git", "synthetic.jsonl");
+  fs.writeFileSync(
+    source,
+    JSON.stringify({ type: "session", id: "shared" }) +
+      "\n" +
+      JSON.stringify({
+        type: "message",
+        message: { role: "user", content: "First evidence" },
+      }),
+  );
+  const first = importTrace(traces, source, "First capture");
+  fs.appendFileSync(
+    source,
+    "\n" +
+      JSON.stringify({
+        type: "message",
+        message: { role: "assistant", content: "Later evidence" },
+      }),
+  );
+  const second = importTrace(traces, source, "Second capture");
+  const { request } = await server(t, { repo, traces });
+  const legacy = await (await request("/api/traces/catalog.json")).json();
+  assert.equal(legacy.length, 2);
+  const grouped = await (await request("/api/traces/sessions.json")).json();
+  const advertised = await (
+    await request("/api/articles/authoring.json")
+  ).json();
+  assert.ok(advertised.tools.includes("wiki.traceSessions"));
+  assert.ok(advertised.tools.includes("wiki.traceLines"));
+  assert.equal(grouped.total, 1);
+  assert.equal(grouped.sessions[0].snapshot_count, 2);
+  const filtered = await (
+    await request(
+      "/api/traces/catalog.json?format=pi&session_id=shared&limit=1",
+    )
+  ).json();
+  assert.equal(filtered.snapshots.length, 1);
+  assert.equal(filtered.nextOffset, 1);
+  const ranged = await (
+    await request(`/api/traces/${second.id}/lines.json?start=2&end=3`)
+  ).json();
+  assert.equal(ranged.lines.length, 2);
+  assert.equal(ranged.html, undefined);
+  assert.match(ranged.lines[0].url, /#line-2$/);
+  assert.equal(
+    (await request(`/api/traces/${first.id}/lines.json?start=3&end=3`)).status,
+    404,
+  );
+  assert.equal(
+    (await request(`/api/traces/${first.id}/lines.json?start=1&end=101`))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await request("/api/traces/sessions.json?limit=101")).status,
+    400,
+  );
+  const original = globalThis.fetch;
+  globalThis.fetch = request;
+  t.after(() => {
+    globalThis.fetch = original;
+  });
+  const tools = [];
+  const controller = await registerTools(
+    { registerTool: (t) => tools.push(t) },
+    false,
+  );
+  assert.equal(
+    (await tools.find((t) => t.name === "wiki.traceSessions").execute({}))
+      .total,
+    1,
+  );
+  assert.equal(
+    (
+      await tools
+        .find((t) => t.name === "wiki.traceLines")
+        .execute({ id: second.id, start: 3, end: 3 })
+    ).lines[0].value.message.content,
+    "Later evidence",
+  );
+  assert.equal(
+    (
+      await tools
+        .find((t) => t.name === "wiki.traces")
+        .execute({ session_id: "shared", format: "pi", limit: 1 })
+    ).total,
+    2,
+  );
+  controller.abort();
 });

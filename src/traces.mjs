@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
+import { WikiError } from "./errors.mjs";
 import { Worker } from "node:worker_threads";
 export const TRACE_VERSION = 1;
 export const TRACE_PAGE_SIZE = 100;
@@ -120,7 +121,30 @@ export class TraceStore {
       page > Math.ceil(metadata.records / TRACE_PAGE_SIZE)
     )
       return Promise.resolve(null);
-    const key = `${TRACE_VERSION}:${id}:${page}`;
+    return this.enqueue(metadata, { page });
+  }
+  readLines(id, start, end) {
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      start < 1 ||
+      end < start ||
+      end - start >= 100
+    )
+      return Promise.reject(
+        new WikiError(
+          "INVALID_RANGE",
+          "Request 1–100 source lines with positive start and end",
+        ),
+      );
+    const metadata = this.metadata(id);
+    return metadata
+      ? this.enqueue(metadata, { start, end })
+      : Promise.resolve(null);
+  }
+  enqueue(metadata, selection) {
+    if (this.closed) return Promise.reject(new Error("Trace store closed"));
+    const key = `${TRACE_VERSION}:${metadata.id}:${JSON.stringify(selection)}`;
     if (this.cache.has(key)) {
       const value = this.cache.get(key);
       this.cache.delete(key);
@@ -131,7 +155,7 @@ export class TraceStore {
     if (this.queue.length >= 32)
       return Promise.reject(new Error("Trace renderer busy"));
     const promise = new Promise((resolve, reject) =>
-      this.queue.push({ key, metadata, page, resolve, reject }),
+      this.queue.push({ key, metadata, ...selection, resolve, reject }),
     );
     this.pending.set(key, promise);
     this.pump();
@@ -147,12 +171,14 @@ export class TraceStore {
             root: this.root,
             metadata: job.metadata,
             page: job.page,
+            start: job.start,
+            end: job.end,
           },
           resourceLimits: { maxOldGenerationSizeMb: 512 },
         },
       );
       this.workers.add(worker);
-      this.renders++;
+      if (job.page) this.renders++;
       let finished = false;
       const finish = (error, result) => {
         if (finished) return;
@@ -186,7 +212,11 @@ export class TraceStore {
       );
       worker.once("message", (value) =>
         value.error
-          ? finish(new Error(value.error))
+          ? finish(
+              value.code
+                ? new WikiError(value.code, value.error, value.status)
+                : new Error(value.error),
+            )
           : finish(null, value.result),
       );
       worker.once("error", (error) => finish(error));

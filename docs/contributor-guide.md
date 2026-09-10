@@ -35,10 +35,10 @@ context; change `TRACE_VERSION` when projection or index interpretation changes.
 
 ## Small contributions with clear completion criteria
 
-1. **Bound trace catalogs.** Add optional pagination and snapshot/session filters;
-   preserve existing snapshot URLs and test growing sessions with distinct hashes.
-2. **Selective evidence reads.** Add bounded line-range reads without rendering HTML;
-   test blank source lines, out-of-range requests and byte limits on large records.
+1. **Reduce catalog scans.** Benchmark a rebuildable metadata index behind existing
+   paginated snapshot/session APIs; preserve import ordering and snapshot URLs.
+2. **Reduce cold range I/O.** Explore verified line-offset indexes for bounded source
+   reads without weakening integrity checks or changing physical line citations.
 3. **Reduce cold trace work.** Benchmark a rebuildable line-offset index against
    `npm run benchmark:serve`; preserve integrity checks and exact source anchors.
 4. **Broaden format compatibility.** Add one documented synthetic format variant

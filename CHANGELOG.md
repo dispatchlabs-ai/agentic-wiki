@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Session grouping in the trace catalog, with paginated session/snapshot APIs and
+  a `wiki.traceSessions` tool. Original snapshot URLs remain unchanged.
+- Bounded original source-line reads through HTTP and `wiki.traceLines`, retaining
+  blank lines and stable citations without rendering HTML. Cold reads stream the
+  full source for integrity verification and cap selected text at 256 KiB.
+
 ## 0.1.0 — 2026-09-10
 
 Completes the 0.1.0-alpha.1 preview. This is an initial-development source release.

@@ -23,7 +23,8 @@ and ordinary article navigation still work.
 The home feed shows the twelve most recently updated current articles, optionally
 filtered to today or this week. It is not a complete revision activity log. Topics
 can be filtered and sorted; search groups article and trace matches. The trace
-catalog supports harness filtering and dialogue search when its index exists.
+catalog groups snapshots by harness and session ID, with links to every capture.
+It supports harness filtering and dialogue search when its index exists.
 
 Article tabs expose Git history and sources from the selected revision. Sources
 are deduplicated links from Markdown and source metadata; their presence does not
