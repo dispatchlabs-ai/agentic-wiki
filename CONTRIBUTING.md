@@ -21,3 +21,6 @@ on the work. Report vulnerabilities privately as described in [SECURITY.md](SECU
 Start with [contributor priorities and contracts](docs/contributor-guide.md) for
 small scoped improvements, format fixtures, and acceptance criteria. Browser work
 also needs `npx playwright install chromium` and `npm run test:browser`.
+
+User-visible changes need a changelog entry and a versioned release before being
+reported as released. Follow [versioning and releases](docs/releases.md).

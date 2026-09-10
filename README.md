@@ -3,8 +3,9 @@
 Agentic Wiki is an MIT-licensed open-source project created by Chris Reynolds,
 cofounder of **Dispatch Labs AI**.
 
-**Status: 0.1.0-alpha.1 — experimental source release.** Interfaces and trace
-interpretation may change. No production support or compatibility guarantee is made.
+**Status: 0.1.0 — initial development source release.**
+See the [changelog](CHANGELOG.md) and [versioning and release policy](docs/releases.md).
+The public API is still evolving; this is not a production-support commitment.
 
 A small Git-backed Markdown wiki for people and agents. Node serves sanitized
 articles on demand; SQLite FTS5 indexes changed blobs and wiki links. Article
