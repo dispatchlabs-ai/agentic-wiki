@@ -8,7 +8,7 @@
  * @typedef {{line:number,value:Record<string,any>}} SourceRecord
  * @typedef {SourceRecord & {kind:string,text:string,label:string,timestamp?:unknown,blocks?:Record<string,any>[],branch?:boolean,parentLine?:number,mirrorOf?:number,superseded?:boolean}} TraceEvent
  * @typedef {{id:string,line:number,page:number,imported_at:string,url:string}} Provenance
- * @typedef {{id:string,line:number,page:number,role:string,title:string,format:Harness,session_id:string|null,imported_at:string,snippet:string,logical_key:string,url:string,snapshot_count:number,provenance:Provenance[]}} TraceHit
+ * @typedef {{id:string,line:number,page:number,role:string,title:string,format:Harness,session_id:string|null,imported_at:string,snippet:string,logical_key:string,url:string,snapshot_count:number,provenance:Provenance[],provenance_url:string,provenance_nextOffset:number|null}} TraceHit
  * @typedef {{indexed:boolean,results:TraceHit[],nextOffset:number|null,error?:string}} TraceSearchResult
  * @typedef {{id:string,format:Harness,page:number,pages:number,total_records:number,records:TraceEvent[],html:string}} RenderedTrace
  * @typedef {{transport:"file",path:string,directory:string,size:number}} SpoolResult

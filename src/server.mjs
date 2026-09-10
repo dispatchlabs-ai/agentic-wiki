@@ -7,7 +7,14 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { GitWiki, wikiRepo } from "./git-wiki.mjs";
 import { WikiSearch } from "./wiki-search.mjs";
-import { article, renderMarkdown, sources, link, list } from "./render.mjs";
+import {
+  article,
+  renderMarkdown,
+  sources,
+  link,
+  list,
+  shell,
+} from "./render.mjs";
 import {
   home,
   topics,
@@ -20,7 +27,11 @@ import {
 } from "./views.mjs";
 import { TraceStore } from "./traces.mjs";
 import { catalogOptions } from "./trace-catalog.mjs";
-import { searchTraces, traceSearchHealth } from "./trace-search.mjs";
+import {
+  searchTraces,
+  traceSearchHealth,
+  traceProvenance,
+} from "./trace-search.mjs";
 const assetRoot = fileURLToPath(new URL("../public/", import.meta.url));
 export function createWiki({
   repo = wikiRepo(),
@@ -254,6 +265,45 @@ export function createWiki({
           "text/html",
         );
       }
+      if (
+        ["/api/traces/provenance.json", "/traces/provenance/"].includes(
+          url.pathname,
+        )
+      ) {
+        try {
+          const result = traceProvenance(
+            traces,
+            url.searchParams.get("key") || "",
+            {
+              limit: Number(url.searchParams.get("limit") || 20),
+              offset: Number(url.searchParams.get("offset") || 0),
+            },
+          );
+          if (url.pathname === "/traces/provenance/") {
+            return send(
+              200,
+              shell(
+                "Source citations",
+                `<h1>Source citations</h1><p>${result.snapshot_count} snapshots · ${result.total} citations</p>${list(result.provenance.map((p) => link(p.url, `Imported ${p.imported_at} · line ${p.line}`)))}${result.nextOffset === null ? "" : link(`/traces/provenance/?key=${result.logical_key}&offset=${result.nextOffset}`, "Next citations")}`,
+                { active: "Traces" },
+              ),
+              "text/html",
+            );
+          }
+          return send(200, {
+            ...result,
+            next:
+              result.nextOffset === null
+                ? null
+                : `/api/traces/provenance.json?key=${result.logical_key}&limit=${url.searchParams.get("limit") || 20}&offset=${result.nextOffset}`,
+          });
+        } catch (e) {
+          return send(e instanceof WikiError ? e.status : 503, {
+            error: e.message,
+            code: e instanceof WikiError ? e.code : "SEARCH_UNAVAILABLE",
+          });
+        }
+      }
       if (url.pathname === "/api/traces/search") {
         try {
           return send(
@@ -367,6 +417,7 @@ export function createWiki({
             "wiki.read",
             "wiki.history",
             "wiki.traceSearch",
+            "wiki.traceProvenance",
             "wiki.traceSessions",
             "wiki.traceLines",
             "wiki.traces",

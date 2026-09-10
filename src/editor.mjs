@@ -38,28 +38,53 @@ export function saveGitEdits(repo, draft) {
         "Operation identity already used for different content",
         409,
       );
+    const commit = git(repo, [
+      "log",
+      "-1",
+      "--format=%H",
+      wiki.head,
+      "--",
+      `.wiki/operations/${draft.operation_id}.json`,
+    ]);
+    const tree = git(repo, ["ls-tree", "-rz", commit, "--", "wiki"]).split(
+      "\0",
+    );
     return {
       ...prior.receipt,
       state: "already-saved",
       articles: prior.receipt.articles.map((a) => {
-        const revision_id =
-          a.revision_id || wiki.revision(a.id, a.number)?.revision_id;
+        let number = a.number;
+        let revision_id = a.revision_id;
+        if (!revision_id) {
+          const entry = tree.find(
+            (line) => path.basename(line.split("\t")[1] || "", ".md") === a.id,
+          );
+          if (entry) {
+            const [object, filename] = entry.split("\t");
+            revision_id = object.split(" ")[2];
+            const changed = git(repo, [
+              "log",
+              "-1",
+              "--first-parent",
+              "--format=%H",
+              commit,
+              "--",
+              filename,
+            ]);
+            number =
+              wiki.history(a.id).find((ref) => ref.commit === changed)
+                ?.number || number;
+          } else revision_id = wiki.revision(a.id, a.number)?.revision_id;
+        }
         if (typeof revision_id !== "string")
           throw new WikiError(
             "INVALID_RECEIPT",
             "Recorded article revision is unavailable",
             503,
           );
-        return { ...a, revision_id };
+        return { ...a, number, revision_id };
       }),
-      commit: git(repo, [
-        "log",
-        "-1",
-        "--format=%H",
-        wiki.head,
-        "--",
-        `.wiki/operations/${draft.operation_id}.json`,
-      ]),
+      commit,
     };
   }
   const files = {},

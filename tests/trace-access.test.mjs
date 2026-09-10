@@ -1,3 +1,6 @@
+import { Readable } from "node:stream";
+import { spoolTraceLines } from "../src/trace-lines.mjs";
+import { MAX_TRACE_BYTES } from "../src/traces.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -159,5 +162,46 @@ test("large explicit ranges are disk-spooled without entering the rendered cache
     );
   } finally {
     fs.rmSync(result.directory, { recursive: true, force: true });
+  }
+});
+
+test("range verification enforces the archive limit before and during streaming", async (t) => {
+  const { root, metadata } = archive(
+    t,
+    JSON.stringify({ type: "session", id: "size" }),
+  );
+  const source = path.join(root, metadata.id, "source.jsonl"),
+    directory = path.join(root, "spool-limit");
+  fs.mkdirSync(directory);
+  fs.chmodSync(source, 0o600);
+  fs.truncateSync(source, MAX_TRACE_BYTES + 1);
+  await assert.rejects(
+    spoolTraceLines(root, metadata, 1, 1, directory),
+    /exceeds 128 MiB/,
+  );
+  assert.deepEqual(fs.readdirSync(directory), []);
+  fs.truncateSync(source, 1);
+  const original = fs.createReadStream;
+  fs.createReadStream = (file, options) =>
+    String(file) === source
+      ? Readable.from(
+          (function* () {
+            const chunk = Buffer.alloc(1024 * 1024);
+            for (let i = 0; i < 129; i++) yield chunk;
+          })(),
+        )
+      : original(file, options);
+  try {
+    await assert.rejects(
+      spoolTraceLines(root, metadata, 1, 1, directory),
+      /exceeds 128 MiB/,
+    );
+    assert.ok(
+      fs.statSync(path.join(directory, "verified.jsonl")).size <=
+        MAX_TRACE_BYTES,
+    );
+    assert.equal(fs.existsSync(path.join(directory, "response.json")), false);
+  } finally {
+    fs.createReadStream = original;
   }
 });

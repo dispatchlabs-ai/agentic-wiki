@@ -225,6 +225,7 @@ test("WebMCP registers discoverable schemas and invokes the underlying HTTP API"
       "wiki.read",
       "wiki.history",
       "wiki.traceSearch",
+      "wiki.traceProvenance",
       "wiki.traceSessions",
       "wiki.traceLines",
       "wiki.traces",
@@ -241,6 +242,7 @@ test("WebMCP registers discoverable schemas and invokes the underlying HTTP API"
   );
   const traceSearch = registered.find(
     (r) => r.tool.name === "wiki.traceSearch",
+    "wiki.traceProvenance",
     "wiki.traceSessions",
     "wiki.traceLines",
   ).tool;
@@ -250,7 +252,7 @@ test("WebMCP registers discoverable schemas and invokes the underlying HTTP API"
   assert.ok(registered.every((r) => r.options.signal.aborted));
   const readonly = [];
   await registerTools({ registerTool: (t) => readonly.push(t) }, false);
-  assert.equal(readonly.length, 8);
+  assert.equal(readonly.length, 9);
 });
 
 test("failed index transactions keep reader and search on one snapshot, then recover", async (t) => {
@@ -704,4 +706,94 @@ test("older durable receipts without blob IDs still resolve their recorded revis
   const retry = await save(draft);
   assert.equal(retry.status, 200);
   assert.deepEqual((await retry.json()).articles, first.articles);
+});
+
+test("legacy recreation retry resolves the receipt tree before colliding revision numbers", async (t) => {
+  const { repo, save } = await server(t);
+  const a = await (
+    await save({ operation_id: "old-a", updates: [update("legacy-reborn")] })
+  ).json();
+  await save({
+    operation_id: "old-b",
+    updates: [
+      {
+        ...update("legacy-reborn", "Second"),
+        expected_revision_id: a.articles[0].revision_id,
+      },
+    ],
+  });
+  git(repo, ["rm", "wiki/legacy-reborn.md"]);
+  git(repo, ["commit", "-m", "Delete"]);
+  const draft = {
+    operation_id: "old-reborn",
+    updates: [update("legacy-reborn", "Third")],
+  };
+  const recreated = await (await save(draft)).json();
+  const file = path.join(repo, ".wiki/operations/old-reborn.json");
+  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  delete stored.receipt.articles[0].revision_id;
+  stored.receipt.articles[0].number = 1;
+  fs.writeFileSync(file, JSON.stringify(stored));
+  git(repo, ["add", file]);
+  git(repo, ["commit", "-m", "Legacy receipt"]);
+  await save({
+    operation_id: "old-after",
+    updates: [
+      {
+        ...update("legacy-reborn", "Fourth"),
+        expected_revision_id: recreated.articles[0].revision_id,
+      },
+    ],
+  });
+  assert.deepEqual(
+    (await (await save(draft)).json()).articles,
+    recreated.articles,
+  );
+});
+test("provenance API, WebMCP and human pages preserve paginated citations", async (t) => {
+  const repo = fixture(t),
+    root = path.join(repo, ".git", "traces"),
+    source = path.join(repo, ".git", "source.jsonl");
+  let rows = [
+    { type: "session", id: "provenance" },
+    {
+      type: "message",
+      id: "event",
+      message: { role: "user", content: "Needle" },
+    },
+  ];
+  for (let i = 0; i < 26; i++) {
+    rows.push({ type: "context", id: String(i) });
+    fs.writeFileSync(source, rows.map(JSON.stringify).join("\n"));
+    importTrace(root, source, "Capture");
+  }
+  indexTraces(root);
+  const { request } = await server(t, { repo, traces: root });
+  const hit = (await (await request("/api/traces/search?q=Needle")).json())
+    .results[0];
+  assert.equal(hit.provenance.length, 5);
+  assert.equal(hit.snapshot_count, 26);
+  const original = globalThis.fetch;
+  globalThis.fetch = request;
+  t.after(() => {
+    globalThis.fetch = original;
+  });
+  const registered = [];
+  await registerTools(
+    { registerTool: async (tool) => registered.push(tool) },
+    false,
+  );
+  const page = await registered
+    .find((t) => t.name === "wiki.traceProvenance")
+    .execute({ key: hit.logical_key, limit: 20 });
+  assert.equal(page.total, 26);
+  assert.equal(page.provenance.length, 20);
+  const next = await (await request(page.next)).json();
+  assert.equal(next.provenance.length, 6);
+  assert.equal(next.next, null);
+  assert.match(
+    await (await request(`/traces/provenance/?key=${hit.logical_key}`)).text(),
+    /Next citations/,
+  );
+  assert.equal((await request(hit.provenance_url + "&limit=101")).status, 400);
 });

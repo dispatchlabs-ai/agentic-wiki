@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { pipeline } from "node:stream/promises";
 import { Transform } from "node:stream";
-import { TRACE_PAGE_SIZE } from "./traces.mjs";
+import { MAX_TRACE_BYTES, TRACE_PAGE_SIZE } from "./traces.mjs";
 
 // Verify into private temporary storage before preparing any response. The
 // verified copy also prevents a second source read from racing a source mutation.
@@ -14,11 +14,18 @@ import { TRACE_PAGE_SIZE } from "./traces.mjs";
 export async function spoolTraceLines(root, metadata, start, end, directory) {
   const verified = path.join(directory, "verified.jsonl"),
     output = path.join(directory, "response.json");
+  const source = path.join(root, metadata.id, "source.jsonl");
+  if ((await fs.promises.stat(source)).size > MAX_TRACE_BYTES)
+    throw Error("Trace exceeds 128 MiB");
+  let bytes = 0;
   const hash = createHash("sha256");
   await pipeline(
-    fs.createReadStream(path.join(root, metadata.id, "source.jsonl")),
+    fs.createReadStream(source),
     new Transform({
       transform(chunk, encoding, callback) {
+        bytes += chunk.length;
+        if (bytes > MAX_TRACE_BYTES)
+          return callback(Error("Trace exceeds 128 MiB"));
         hash.update(chunk);
         callback(null, chunk);
       },

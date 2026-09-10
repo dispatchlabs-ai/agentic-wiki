@@ -1,10 +1,15 @@
+import { archiveStamp, recordImport } from "../src/trace-metadata.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fixture } from "./helpers.mjs";
 import { importTrace, TraceStore } from "../src/traces.mjs";
-import { indexTraces, searchTraces } from "../src/trace-search.mjs";
+import {
+  indexTraces,
+  searchTraces,
+  traceProvenance,
+} from "../src/trace-search.mjs";
 
 test("logical events paginate independently of growing snapshots and preserve identical branch dialogue", (t) => {
   const repo = fixture(t),
@@ -35,8 +40,19 @@ test("logical events paginate independently of growing snapshots and preserve id
   assert.equal(result.results.length, 1);
   assert.equal(result.nextOffset, null);
   assert.equal(result.results[0].snapshot_count, 25);
-  assert.equal(result.results[0].provenance.length, 25);
+  assert.equal(result.results[0].provenance.length, 5);
   assert.equal(result.results[0].id, newest.id);
+  const citations = [];
+  for (let offset = 0; offset < 25; offset += 7) {
+    const page = traceProvenance(root, result.results[0].logical_key, {
+      limit: 7,
+      offset,
+    });
+    assert.equal(page.total, 25);
+    assert.equal(page.snapshot_count, 25);
+    citations.push(...page.provenance);
+  }
+  assert.equal(new Set(citations.map((p) => p.id)).size, 25);
   rows.push(
     {
       type: "message",
@@ -126,4 +142,29 @@ test("catalog index pages independently, follows imports and removals, and rebui
     "corrupt metadata projection",
   );
   assert.equal(store.catalogPage(options).total, 1);
+});
+
+test("overlapping metadata updates cannot certify an incomplete catalog", (t) => {
+  const repo = fixture(t),
+    root = path.join(repo, ".git", "traces"),
+    source = path.join(repo, ".git", "capture.jsonl");
+  fs.mkdirSync(root);
+  const store = new TraceStore(root);
+  t.after(() => store.close());
+  const options = { limit: 20, offset: 0 };
+  assert.equal(store.catalogPage(options).total, 0);
+  const before = archiveStamp(root);
+  const indexFile = path.join(root, ".metadata", "catalog.sqlite3"),
+    initial = fs.readFileSync(indexFile);
+  const values = [];
+  for (const id of ["a", "b"]) {
+    fs.writeFileSync(source, JSON.stringify({ type: "session", id }));
+    values.push(importTrace(root, source, id));
+  }
+  // Reproduce both directories landing before either updater observes the same old stamp.
+  fs.writeFileSync(indexFile, initial);
+  recordImport(root, values[0], before);
+  recordImport(root, values[1], before);
+  assert.equal(store.catalogPage(options).total, 2);
+  assert.equal(store.catalogPage(options, true).total, 2);
 });

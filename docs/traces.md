@@ -95,8 +95,8 @@ Catalogs order by import time descending with snapshot ID as a deterministic tie
 breaker. Pagination is over the currently imported archive; concurrent imports can
 move entries between pages. Every original snapshot URL and citation stays valid.
 Catalog pagination uses `.metadata/catalog.sqlite3`, independently of dialogue
-search. The first catalog read builds it from immutable metadata; imports update it,
-and a change to the archive directory triggers reconciliation. A corrupt or
+search. The first catalog read builds it from immutable metadata; imports invalidate
+it for a complete stable rescan on the next read, and a change to the archive directory triggers reconciliation. A corrupt or
 incompatible catalog projection rebuilds automatically. Warm paginated requests
 query the projection and do not read each snapshot’s metadata file. Rebuilding and
 explicit archive health checks still scan the archive. Do not edit metadata in place.
@@ -143,7 +143,7 @@ outside the HTTP process and never modifies sources. A failed indexing run rolls
 back; a successfully imported snapshot remains available for reading.
 
 `GET /api/traces/search?q=prototype&limit=20&offset=0` and WebMCP
-`wiki.traceSearch` return dialogue snippets, role, snapshot/session identities,
+`wiki.traceSearch` returns dialogue snippets, role, snapshot/session identities,
 and source-line URLs. Literal terms use AND/prefix matching; queries are limited
 to 300 characters and 30 terms. Limits are 1–40 and offsets 0–10,000. Follow
 `nextOffset` for more results. `indexed: false` means no compatible index exists.
@@ -163,7 +163,7 @@ snapshot-ID tie breaker, and returns `logical_key`, `snapshot_count`, and
 `provenance` entries containing original snapshot IDs, import times and citation
 URLs. Provenance includes other indexed captures of that event, even when their
 text did not match the query. Original snapshots and records are never removed.
-Search schema version 2 requires a rebuild of older dialogue indexes; running the
+Search schema version 3 requires a rebuild of older dialogue indexes; running the
 indexing command migrates compatible SQLite files transactionally. Corrupt files
 must be removed/rebuilt while no index writer is running.
 
@@ -186,3 +186,25 @@ The authoritative archive remains recoverable, but archive durability alone does
 not prove service correctness or production suitability. These regression fixes
 cover receipt identity, degraded availability and snapshot-aware retrieval; they
 are not a general production-readiness guarantee.
+
+Search returns at most five inline `provenance` citations per logical event, with an
+exact `snapshot_count`, `provenance_url`, and `provenance_nextOffset`. Follow
+`/api/traces/provenance.json?key=LOGICAL_KEY&limit=20&offset=0` or call
+`wiki.traceProvenance` to read every citation in pages of 1–100. The response includes
+`total` citations, `snapshot_count`, `nextOffset`, and an HTTP `next` URL. Provenance
+offsets may be any nonnegative safe integer; original source access is unchanged.
+Browser search links to `/traces/provenance/?key=LOGICAL_KEY`, with next-page links.
+An ordinary SQLite evidence index supports lookup without scanning all FTS rows.
+
+Range spooling enforces the existing 128 MiB archive limit both before opening the
+stream and while copying it, including files that grow after the initial stat.
+This does not limit the requested line count within an accepted snapshot.
+Only a complete stable metadata scan certifies the catalog stamp; overlapping
+imports leave it invalid until reconciled, so a concurrent snapshot cannot disappear
+from an apparently current index.
+
+A synthetic Linux / Node 26.8.1 check with 1,000 growing snapshots and 40 logical
+events returned 200 inline citations in a 70,260-byte JSON response (296 ms for
+search). All counts remained 1,000, and paging one event recovered all 1,000
+snapshot citations. Timing is a single local observation, not a latency guarantee;
+FTS candidate grouping still depends on the number of matching source records.

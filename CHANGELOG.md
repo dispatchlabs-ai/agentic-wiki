@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Recover legacy recreation receipts from their recorded Git tree before numeric fallback.
+- Enforce the existing archive size limit throughout verified range spooling.
+- Bound inline search provenance and expose complete paginated citations in HTTP,
+  WebMCP, and the browser. Search schema 3 requires an index rebuild.
+- Reconcile metadata after overlapping imports instead of certifying partial updates.
+
 ### Fixed
 
 - Recreated articles advance their complete revision lifecycle. New durable receipts

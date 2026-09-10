@@ -184,3 +184,14 @@ that a process is still alive. Only after all writers are stopped, remove the
 When upgrading from the original flock-based alpha, stop all old writers first;
 the two lock protocols do not coordinate. Shared/network filesystems and writers
 on multiple hosts are outside the supported lock model.
+
+Legacy edit receipts without `revision_id` resolve the article blob from the Git
+tree at the recorded operation commit. The corresponding historical number is
+recovered when available, including article recreation; the legacy numeric lookup
+is only a fallback when the article is absent from that tree.
+
+Trace search embeds at most five source citations per event. For complete
+provenance, use `GET /api/traces/provenance.json?key=LOGICAL_KEY&limit=20&offset=0`
+or WebMCP `wiki.traceProvenance`. Pages contain `provenance`, exact `total` and
+`snapshot_count`, `nextOffset`, and a `next` URL. Limits are 1–100; offsets are
+nonnegative safe integers. Unavailable or incompatible indexes return 503.

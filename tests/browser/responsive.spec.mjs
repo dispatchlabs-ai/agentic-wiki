@@ -260,3 +260,26 @@ test("logical trace hits expose their original snapshot citations", async ({
 function locationSafeHash(url) {
   return new URL(url).hash;
 }
+
+test("provenance pages expose navigable citations on mobile", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const response = await page.request.get(
+    base + "/api/traces/search?q=prototype",
+  );
+  const hit = (await response.json()).results.find(
+    (r) => r.snapshot_count === 2,
+  );
+  await page.goto(base + `/traces/provenance/?key=${hit.logical_key}&limit=1`);
+  await expect(
+    page.getByRole("heading", { name: "Source citations", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("main")).toHaveCount(1);
+  await page.getByRole("link", { name: "Next citations" }).click();
+  await expect(page.getByRole("link", { name: /Imported .*line/ })).toHaveCount(
+    1,
+  );
+  await page.getByRole("link", { name: /Imported .*line/ }).click();
+  await expect(page.locator("#line-3")).toHaveCount(1);
+});

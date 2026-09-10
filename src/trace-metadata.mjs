@@ -64,16 +64,18 @@ export function rebuildMetadata(root) {
     fs.rmSync(temporary, { force: true });
   }
 }
-export function recordImport(root, m, before) {
+export function recordImport(root, m, _before) {
   if (!fs.existsSync(filename(root))) return;
   let db;
   try {
     db = new DatabaseSync(filename(root));
     db.exec("PRAGMA busy_timeout=100; BEGIN IMMEDIATE");
     const control = db.prepare("SELECT * FROM control").get();
-    if (control?.version !== VERSION || control.stamp !== before) return; // next reader rebuilds
+    if (control?.version !== VERSION) return;
     insert(db, m);
-    db.prepare("UPDATE control SET stamp=?").run(archiveStamp(root));
+    // A root timestamp cannot prove that this was the only concurrent import.
+    // Only a complete stable scan may certify the projection as current.
+    db.exec("UPDATE control SET stamp=NULL");
     db.exec("COMMIT");
   } catch {
     /* Imports remain durable when this disposable index is unavailable. */

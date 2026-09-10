@@ -13,7 +13,7 @@ import {
   TRACE_PAGE_SIZE,
 } from "./traces.mjs";
 import { project } from "./trace-format.mjs";
-export const SEARCH_VERSION = 2;
+export const SEARCH_VERSION = 3;
 const filename = (root) => path.join(root, "search.sqlite3");
 function logicalEventKey(event, metadata, prefix) {
   const r = event.value,
@@ -45,17 +45,20 @@ export function indexTraces(root) {
       db.prepare("SELECT value FROM version").get()?.value !== SEARCH_VERSION
     ) {
       db.exec(
-        "DROP TABLE IF EXISTS snapshots; DROP TABLE IF EXISTS dialogue; DELETE FROM version;",
+        "DROP TABLE IF EXISTS evidence; DROP TABLE IF EXISTS snapshots; DROP TABLE IF EXISTS dialogue; DELETE FROM version;",
       );
       db.prepare("INSERT INTO version VALUES(?)").run(SEARCH_VERSION);
     }
-    db.exec(`CREATE TABLE IF NOT EXISTS snapshots(id TEXT PRIMARY KEY,title TEXT,format TEXT,session_id TEXT,imported_at TEXT);
+    db.exec(`CREATE TABLE IF NOT EXISTS evidence(logical_key TEXT,snapshot TEXT,line INTEGER,page INTEGER,PRIMARY KEY(logical_key,snapshot,line));
+      CREATE INDEX IF NOT EXISTS evidence_snapshot ON evidence(snapshot);
+      CREATE TABLE IF NOT EXISTS snapshots(id TEXT PRIMARY KEY,title TEXT,format TEXT,session_id TEXT,imported_at TEXT);
       CREATE VIRTUAL TABLE IF NOT EXISTS dialogue USING fts5(snapshot UNINDEXED,line UNINDEXED,page UNINDEXED,role UNINDEXED,logical_key UNINDEXED,text);`);
     const catalog = scanMetadata(root);
     const ids = new Set(catalog.map((m) => m.id));
     for (const { id } of db.prepare("SELECT id FROM snapshots").all()) {
       if (ids.has(id)) continue;
       db.prepare("DELETE FROM dialogue WHERE snapshot=?").run(id);
+      db.prepare("DELETE FROM evidence WHERE snapshot=?").run(id);
       db.prepare("DELETE FROM snapshots WHERE id=?").run(id);
     }
     let added = 0;
@@ -101,15 +104,23 @@ export function indexTraces(root) {
               .map((b) => b.text || "")
               .join("\n")
           : event.text;
-        if (text)
+        if (text) {
+          const key = logicalEventKey(event, m, prefixes.get(event.line));
+          db.prepare("INSERT OR IGNORE INTO evidence VALUES(?,?,?,?)").run(
+            key,
+            m.id,
+            event.line,
+            Math.floor(i / TRACE_PAGE_SIZE) + 1,
+          );
           insert.run(
             m.id,
             event.line,
             Math.floor(i / TRACE_PAGE_SIZE) + 1,
             event.kind,
-            logicalEventKey(event, m, prefixes.get(event.line)),
+            key,
             text,
           );
+        }
       });
       added++;
     }
@@ -188,27 +199,75 @@ export function searchTraces(
           snippet: String(rest.snippet),
           logical_key: String(rest.logical_key),
         };
-        const provenance = db
-          .prepare(
-            `SELECT DISTINCT s.id,s.imported_at,d.line,d.page FROM dialogue d JOIN snapshots s ON s.id=d.snapshot WHERE d.logical_key=? ORDER BY s.imported_at DESC,s.id DESC,d.line`,
-          )
-          .all(r.logical_key)
-          .map((p) => ({
-            id: String(p.id),
-            line: Number(p.line),
-            page: Number(p.page),
-            imported_at: String(p.imported_at),
-            url: `/traces/${p.id}/?page=${p.page}#line-${p.line}`,
-          }));
+        const evidence = provenancePage(db, hit.logical_key, 5, 0);
         return {
           ...hit,
           url: `/traces/${r.id}/?page=${r.page}#line-${r.line}`,
-          snapshot_count: new Set(provenance.map((p) => p.id)).size,
-          provenance,
+          snapshot_count: evidence.snapshot_count,
+          provenance: evidence.provenance,
+          provenance_url: `/api/traces/provenance.json?key=${hit.logical_key}`,
+          provenance_nextOffset: evidence.nextOffset,
         };
       }),
       nextOffset: rows.length > limit ? offset + limit : null,
     };
+  } finally {
+    db.close();
+  }
+}
+
+function provenancePage(db, key, limit, offset) {
+  const counts = db
+    .prepare(
+      "SELECT COUNT(*) AS total,COUNT(DISTINCT snapshot) AS snapshot_count FROM evidence WHERE logical_key=?",
+    )
+    .get(key);
+  const total = Number(counts.total);
+  const provenance = db
+    .prepare(
+      `SELECT s.id,s.imported_at,e.line,e.page FROM evidence e JOIN snapshots s ON s.id=e.snapshot WHERE e.logical_key=? ORDER BY s.imported_at DESC,s.id DESC,e.line LIMIT ? OFFSET ?`,
+    )
+    .all(key, limit, offset)
+    .map((p) => ({
+      id: String(p.id),
+      line: Number(p.line),
+      page: Number(p.page),
+      imported_at: String(p.imported_at),
+      url: `/traces/${p.id}/?page=${p.page}#line-${p.line}`,
+    }));
+  return {
+    provenance,
+    total,
+    snapshot_count: Number(counts.snapshot_count),
+    nextOffset: offset + limit < total ? offset + limit : null,
+  };
+}
+export function traceProvenance(root, key, { limit = 20, offset = 0 } = {}) {
+  if (
+    !/^[a-f0-9]{64}$/.test(key) ||
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 100 ||
+    !Number.isSafeInteger(offset) ||
+    offset < 0
+  )
+    throw new WikiError("INVALID_PROVENANCE", "Invalid trace provenance range");
+  if (!root || !fs.existsSync(filename(root)))
+    throw new WikiError(
+      "SEARCH_UNAVAILABLE",
+      "Trace search index has not been built",
+      503,
+    );
+  const db = new DatabaseSync(filename(root), { readOnly: true });
+  try {
+    db.exec("PRAGMA busy_timeout=100");
+    if (db.prepare("SELECT value FROM version").get()?.value !== SEARCH_VERSION)
+      throw new WikiError(
+        "SEARCH_UNAVAILABLE",
+        "Trace search index needs rebuilding",
+        503,
+      );
+    return { logical_key: key, ...provenancePage(db, key, limit, offset) };
   } finally {
     db.close();
   }
@@ -228,6 +287,7 @@ export function traceSearchHealth(root) {
         error: "Trace search index needs rebuilding",
       };
     db.prepare("SELECT rowid FROM dialogue LIMIT 1").get();
+    db.prepare("SELECT logical_key FROM evidence LIMIT 1").get();
     return { state: "ready" };
   } catch (e) {
     return { state: "degraded", error: e.message };
