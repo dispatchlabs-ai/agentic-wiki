@@ -128,13 +128,12 @@ export class TraceStore {
       !Number.isSafeInteger(start) ||
       !Number.isSafeInteger(end) ||
       start < 1 ||
-      end < start ||
-      end - start >= 100
+      end < start
     )
       return Promise.reject(
         new WikiError(
           "INVALID_RANGE",
-          "Request 1–100 source lines with positive start and end",
+          "Request source lines with positive start and end, with end >= start",
         ),
       );
     const metadata = this.metadata(id);

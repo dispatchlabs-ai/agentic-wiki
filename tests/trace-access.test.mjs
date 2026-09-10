@@ -49,10 +49,10 @@ test("source ranges retain blank lines, CRLF, Unicode and correct record-page ci
   const rendered = await store.read(metadata.id, 2);
   assert.ok(rendered.records.some((r) => r.line === 102));
   assert.equal(await store.readLines(metadata.id, 104, 104), null);
+  assert.equal((await store.readLines(metadata.id, 1, 103)).lines.length, 103);
   for (const [start, end] of [
     [0, 1],
     [2, 1],
-    [1, 101],
     [1.5, 2],
   ])
     await assert.rejects(
@@ -60,7 +60,7 @@ test("source ranges retain blank lines, CRLF, Unicode and correct record-page ci
       (e) => e.code === "INVALID_RANGE",
     );
 });
-test("range byte limits do not truncate records and unselected large lines are streamed", async (t) => {
+test("caller-selected ranges return large records in full and stream unselected lines", async (t) => {
   const header = JSON.stringify({ type: "session", id: "large" }),
     large = JSON.stringify({
       type: "message",
@@ -77,10 +77,9 @@ test("range byte limits do not truncate records and unselected large lines are s
         message: { role: "user", content: "Last" },
       }),
   );
-  await assert.rejects(
-    store.readLines(metadata.id, 2, 2),
-    (e) => e.status === 413,
-  );
+  const selected = await store.readLines(metadata.id, 2, 2);
+  assert.equal(selected.lines[0].raw, large);
+  assert.equal(selected.lines[0].value.message.content, "x".repeat(300000));
   const tail = await store.readLines(metadata.id, 3, 3);
   assert.equal(tail.lines[0].value.message.content, "Last");
   assert.equal(tail.total_lines, 3);

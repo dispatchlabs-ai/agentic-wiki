@@ -459,7 +459,7 @@ test("comparison query caches stay separate and deleted articles retain history"
   assert.equal((await request("/wiki/guide/compare/?from=1&to=2")).status, 200);
 });
 
-test("session catalogs and bounded evidence are available through HTTP and WebMCP", async (t) => {
+test("session catalogs and caller-selected evidence are available through HTTP and WebMCP", async (t) => {
   const repo = fixture(t),
     traces = path.join(repo, ".git", "traces"),
     source = path.join(repo, ".git", "synthetic.jsonl");
@@ -513,7 +513,7 @@ test("session catalogs and bounded evidence are available through HTTP and WebMC
   assert.equal(
     (await request(`/api/traces/${first.id}/lines.json?start=1&end=101`))
       .status,
-    400,
+    200,
   );
   assert.equal(
     (await request("/api/traces/sessions.json?limit=101")).status,

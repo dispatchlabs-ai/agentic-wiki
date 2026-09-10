@@ -67,7 +67,7 @@ Trace dialogue has a separate disposable FTS index; it does not compete with art
 - `/api/traces/<sha256>.json?page=1` — original records, annotations, page count.
 - WebMCP `wiki.traces` and `wiki.trace` expose those read-only APIs.
 - `/api/traces/sessions.json` and `wiki.traceSessions` — paginated session groups.
-- `/api/traces/<sha256>/lines.json?start=3&end=8` and `wiki.traceLines` — bounded original source lines, without rendering HTML.
+- `/api/traces/<sha256>/lines.json?start=3&end=8` and `wiki.traceLines` — caller-selected original source lines, without rendering HTML.
 
 Page numbers are one-based. Invalid page parameters return 400, unknown snapshots
 or out-of-range pages return 404, and rendering failures or saturation return 503.
@@ -96,11 +96,12 @@ breaker. Pagination is over the currently imported archive; concurrent imports c
 move entries between pages. Every original snapshot URL and citation stays valid.
 These response limits do not eliminate the existing metadata scan of the archive.
 
-## Bounded original lines
+## Original source-line ranges
 
 `wiki.traceLines` takes `{ id, start, end }`; the HTTP endpoint uses the same fields
 as path/query parameters. Both bounds are required, positive, one-based, inclusive,
-and must select at most 100 physical JSONL lines. The response contains `id`,
+and `end` must be at least `start`. The caller chooses how many physical JSONL
+lines to retrieve; there is no line-count or selected-text byte cap. The response contains `id`,
 `format`, actual `start`/`end`, `total_lines`, `nextStart`, and `lines`. Each line
 includes its number, original `raw` text without the LF delimiter, parsed `value`,
 and stable `url`. CR from CRLF is retained in `raw`; blank lines have `value: null`
@@ -108,18 +109,15 @@ and `url: null`. A terminating newline does not create another empty line.
 Record citations use record-page positions, so blank lines never shift the page
 number incorrectly. An end beyond EOF is clamped; a start beyond EOF returns 404.
 
-Selected source text is capped at 256 KiB (excluding LF delimiters). Oversized
-ranges return 413 without partial or truncated records; use a smaller range.
-An individual record above that limit cannot be returned by this endpoint.
-JSON encoding and the additional parsed representation can make the HTTP response
-larger than the source-text cap. Invalid bounds return 400; missing snapshots or
+Complete selected records are returned without truncation. The agent harness owns
+context and output management. Invalid bounds return 400; missing snapshots or
 ranges return 404; integrity failures or worker saturation return 503.
 
 Reads share the bounded worker queue and cache with page reads. A cold read streams
 and hashes the complete immutable source to verify its snapshot ID, but retains
 only selected lines and parses only their JSON. It does not project dialogue or
-render Markdown/HTML. This bounds working memory and returned evidence; it is not
-a random-access disk read and does not eliminate full-source integrity I/O.
+render Markdown/HTML. Memory and response size scale with the caller’s selection.
+This is not a random-access disk read and does not eliminate full-source integrity I/O.
 
 ## Dialogue search
 

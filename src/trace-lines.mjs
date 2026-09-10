@@ -1,18 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { WikiError } from "./errors.mjs";
 import { MAX_TRACE_BYTES, TRACE_PAGE_SIZE } from "./traces.mjs";
-export const MAX_RANGE_BYTES = 256 * 1024;
 
 // Scan/hash the immutable source, retaining only the requested physical lines.
-// No projection or Markdown rendering, and no whole-file or unbounded-line buffer.
+// No projection or Markdown rendering. The caller chooses the amount to read.
 export async function readTraceLines(root, metadata, start, end) {
   const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
   const hash = createHash("sha256"),
     lines = [];
   let bytes = 0,
-    selectedBytes = 0,
     line = 1,
     ordinal = 0,
     nonblank = false,
@@ -22,13 +19,6 @@ export async function readTraceLines(root, metadata, start, end) {
     lineBytes += part.length;
     if (/\S/u.test(part)) nonblank = true;
     if (line >= start && line <= end) {
-      selectedBytes += Buffer.byteLength(part);
-      if (selectedBytes > MAX_RANGE_BYTES)
-        throw new WikiError(
-          "RANGE_TOO_LARGE",
-          "Selected source lines exceed 256 KiB; request a smaller range",
-          413,
-        );
       parts.push(part);
     }
   };
