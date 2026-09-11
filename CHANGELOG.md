@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Isolate draft previews in a bounded worker pool with queue-inclusive deadlines,
+  worker heap/output limits, and cancellation on disconnect. Article serving stays
+  responsive during expensive previews, including on read-only instances.
+- Propagate MCP call cancellation and disconnects to loopback requests so abandoned
+  calls release admission slots and preview workers promptly. Cancelling a save
+  cannot undo a commit; retry with identical input and operation ID.
+- Bound MCP loopback concurrency, response buffering and request duration. Large
+  successful reads return a resource link to complete HTTP JSON; originals remain
+  available without truncation. Errors and writes never become GET resource links.
+- **Client migration:** MCP callers must handle resource-link results as well as
+  inline JSON. The notice includes the complete-result URL; fetch it using the same
+  access credentials or explicitly request a smaller range. See `docs/api.md`.
+
 - Isolate example startup from ambient external-evidence configuration; exercise
   startup, saving, and restart without contacting an operator’s provider or pushing.
 - Add a visual introduction and a clone-to-agent walkthrough, including a personal

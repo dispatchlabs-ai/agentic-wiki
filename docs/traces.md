@@ -132,6 +132,10 @@ response, not an agent context cap. It does not eliminate full-source integrity 
 The internal `readLines` convenience method materializes JSON for in-process callers;
 HTTP uses the streaming `spoolLines` path. Rendered-page cache sizes are calculated
 inside workers, never by stringifying the result again on the server thread.
+Regular MCP links to the complete HTTP result when it exceeds the 1 MiB inline
+budget, rather than buffering and reserializing the spool on the server thread.
+Explicit smaller reads still return inline JSON; see the [MCP response contract](api.md#regular-mcp).
+Following a resource link retains the same authentication and integrity checks.
 
 ## Dialogue search
 

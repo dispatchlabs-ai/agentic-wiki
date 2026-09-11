@@ -1,4 +1,6 @@
 import { createWikiMcp } from "./mcp.mjs";
+import { McpApiClient } from "./mcp-response.mjs";
+import { PreviewRenderer } from "./preview.mjs";
 import { createWikiTools } from "../public/wiki-tools.js";
 import { disclosureOptions } from "./trace-disclosure.mjs";
 import { EvidenceClient } from "./evidence-client.mjs";
@@ -16,14 +18,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { GitWiki, wikiRepo } from "./git-wiki.mjs";
 import { WikiSearch } from "./wiki-search.mjs";
-import {
-  article,
-  renderMarkdown,
-  sources,
-  link,
-  list,
-  shell,
-} from "./render.mjs";
+import { article, sources, link, list, shell } from "./render.mjs";
 import {
   home,
   topics,
@@ -55,6 +50,7 @@ export function createWiki({
     throw Error("Configure either WIKI_TRACES or WIKI_EVIDENCE_URL");
   const evidence = evidenceUrl ? new EvidenceClient(evidenceUrl) : null;
   const traceStore = new TraceStore(traces);
+  const previews = new PreviewRenderer();
   const wiki = new GitWiki(repo),
     index = new WikiSearch(database),
     cache = new Map();
@@ -186,7 +182,16 @@ export function createWiki({
         }
         if (typeof draft?.body !== "string" || draft.body.length > 100000)
           return send(400, { error: "Invalid preview body" });
-        return send(200, { html: await renderMarkdown(draft.body) });
+        const controller = new AbortController();
+        const cancel = () => controller.abort();
+        res.once("close", cancel);
+        try {
+          return send(200, {
+            html: await previews.render(draft.body, controller.signal),
+          });
+        } finally {
+          res.removeListener("close", cancel);
+        }
       }
       if (req.method === "POST" && url.pathname === "/api/articles/edits") {
         if (
@@ -719,60 +724,16 @@ export function createWiki({
       else res.end();
     }
   });
+  const mcpApi = new McpApiClient(server, origin);
   const mcp = createWikiMcp({
     write,
     externalEvidence: !!evidence,
-    request: async (route, draft) => {
-      if (!route.startsWith("/api/"))
-        throw new Error("Invalid internal API route");
-      const address = server.address();
-      if (!address || typeof address === "string")
-        throw new Error("Wiki is not listening");
-      return await new Promise((resolve, reject) => {
-        const upstream = http.request(
-          {
-            hostname: "127.0.0.1",
-            port: address.port,
-            path: route,
-            method: draft ? "POST" : "GET",
-            headers: {
-              Host: new URL(origin).host,
-              Origin: origin,
-              "Content-Type": "application/json",
-              "X-Wiki-Write": "1",
-            },
-          },
-          (response) => {
-            const chunks = [];
-            response.on("data", (chunk) => chunks.push(chunk));
-            response.on("error", reject);
-            response.on("end", () => {
-              try {
-                const result = JSON.parse(
-                  Buffer.concat(chunks).toString("utf8"),
-                );
-                if (response.statusCode < 200 || response.statusCode >= 300)
-                  reject(
-                    new WikiError(
-                      result.code || `HTTP_${response.statusCode}`,
-                      result.error || `HTTP ${response.statusCode}`,
-                      response.statusCode,
-                    ),
-                  );
-                else resolve(result);
-              } catch (error) {
-                reject(error);
-              }
-            });
-          },
-        );
-        upstream.on("error", reject);
-        upstream.end(draft ? JSON.stringify(draft) : undefined);
-      });
-    },
+    request: (route, draft, signal) => mcpApi.request(route, draft, signal),
   });
   server.on("close", () => {
+    mcpApi.close();
     void mcp.close().catch(console.error);
+    void previews.close().catch(console.error);
     clearInterval(timer);
     index.close();
     traceStore.close();

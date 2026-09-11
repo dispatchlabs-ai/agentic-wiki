@@ -127,6 +127,9 @@ imported-archive-only tools. Ordinary browsers still support reading, search,
 and the editor form. Both MCP transports share schemas and API operations.
 The `WIKI_WRITE` setting controls `wiki.save` for both; enabling MCP does not enable writes.
 Non-browser agents can also use the underlying HTTP APIs directly.
+Regular MCP returns a resource link to the complete HTTP result for reads exceeding
+its 1 MiB inline budget; clients must handle links as well as inline JSON. Draft
+previews use a bounded worker pool with a five-second deadline, including queue time.
 
 See [API and editing](docs/api.md) for request shapes, retry semantics, and errors.
 
