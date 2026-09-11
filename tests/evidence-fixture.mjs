@@ -56,6 +56,7 @@ export async function evidenceFixture() {
     role: "tool",
     text: "Recorded tool output",
     line: 200,
+    timestamp: "2026-01-01T10:01:00Z",
   };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://fixture.invalid");
@@ -98,8 +99,17 @@ export async function evidenceFixture() {
       const event = url.searchParams.get("event");
       if (event === "old-tool" || event === "tool-event") kind = "tool";
       if (event === "old-event" || event === "event-101") offset = 100;
-      const selected =
-        kind === "tool" ? [tool] : kind === "dialogue" ? messages : [];
+      const after = url.searchParams.get("after") || "",
+        before = url.searchParams.get("before") || "";
+      const limit = Number(url.searchParams.get("limit") || 100);
+      const selected = (
+        kind === "tool" ? [tool] : kind === "dialogue" ? messages : []
+      ).filter(
+        (m) =>
+          (!after || Date.parse(m.timestamp) >= Date.parse(after)) &&
+          (!before || Date.parse(m.timestamp) < Date.parse(before)),
+      );
+
       return json(200, {
         ...hit,
         harness: "claude",
@@ -107,12 +117,20 @@ export async function evidenceFixture() {
         parent_thread: "fixture-parent",
         kind,
         offset,
-        limit: 100,
+        limit,
+        after,
+        before,
         total: selected.length,
-        nextOffset: offset + 100 < selected.length ? offset + 100 : null,
-        previousOffset: offset > 0 ? Math.max(0, offset - 100) : null,
+        nextOffset: offset + limit < selected.length ? offset + limit : null,
+        previousOffset: offset > 0 ? Math.max(0, offset - limit) : null,
         counts: { dialogue: 102, tool: 1 },
-        messages: selected.slice(offset, offset + 100),
+        messages: selected.slice(offset, offset + limit).map((m) => ({
+          ...m,
+          attachments: (m.attachments || []).map((f) => {
+            const { preview, preview_truncated, ...meta } = f;
+            return url.searchParams.get("attachments") === "preview" ? f : meta;
+          }),
+        })),
         eventFound: event
           ? ["old-tool", "tool-event", "old-event", "event-101"].includes(event)
           : null,

@@ -307,6 +307,30 @@ test("trace HTML and JSON routes share snapshots and validate page requests", as
   assert.match(await html.text(), /Branch change/);
   const data = await (await request(`/api/traces/${metadata.id}.json`)).json();
   assert.equal(data.total_records, 8);
+  const dialogue = await (
+    await request(`/api/traces/${metadata.id}.json?view=conversation`)
+  ).json();
+  assert.ok(dialogue.messages.length > 0);
+  assert.ok(
+    dialogue.messages.every((m) => ["user", "assistant"].includes(m.kind)),
+  );
+  assert.ok(
+    dialogue.messages.every(
+      (m) => m.value === undefined && m.blocks === undefined,
+    ),
+  );
+  const tool = await (
+    await request(`/api/traces/${metadata.id}.json?view=conversation&kind=tool`)
+  ).json();
+  assert.ok(tool.messages.every((m) => m.kind === "tool"));
+  assert.equal(
+    (
+      await request(
+        `/api/traces/${metadata.id}.json?view=conversation&after=yesterday`,
+      )
+    ).status,
+    400,
+  );
   assert.equal(data.html, undefined);
   assert.equal((await request(`/traces/${metadata.id}/?page=0`)).status, 400);
   assert.equal((await request(`/traces/${metadata.id}/?page=2`)).status, 404);

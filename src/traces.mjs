@@ -149,6 +149,12 @@ export class TraceStore {
       return Promise.resolve(null);
     return this.enqueue(metadata, { page });
   }
+  readDisclosure(id, disclosure) {
+    const metadata = this.metadata(id);
+    return metadata
+      ? this.enqueue(metadata, { disclosure })
+      : Promise.resolve(null);
+  }
   async readLines(id, start, end) {
     const result = await this.spoolLines(id, start, end);
     if (!result) return null;
@@ -210,6 +216,7 @@ export class TraceStore {
         root: this.root,
         metadata: job.metadata,
         page: job.page,
+        disclosure: job.disclosure,
         start: job.start,
         end: job.end,
         directory,
@@ -222,7 +229,7 @@ export class TraceStore {
         },
       );
       this.workers.add(worker);
-      if (job.page) this.renders++;
+      if (job.page || job.disclosure) this.renders++;
       let finished = false;
       const finish = (error, result, size = 0) => {
         if (finished) return;
@@ -235,7 +242,7 @@ export class TraceStore {
           fs.rmSync(directory, { recursive: true, force: true });
         if (error) job.reject(error);
         else {
-          if (job.page && size <= this.maxBytes) {
+          if ((job.page || job.disclosure) && size <= this.maxBytes) {
             while (
               this.cache.size &&
               (this.bytes + size > this.maxBytes || this.cache.size >= 256)

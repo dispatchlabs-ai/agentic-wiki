@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 — 2026-09-11
+
+- Trace tools now disclose user prompts and assistant responses first. Tool calls,
+  outputs, recorded reasoning and context require explicit follow-up requests.
+- Added timezone-aware `after`/`before` ranges, applied before pagination, with
+  inclusive/exclusive boundaries and undated-event counts. Source identities and
+  original event text remain intact.
+- External trace API attachments default to metadata; `wiki.file` and explicit
+  `attachments=preview` requests expand content. Human previews remain embedded.
+- **Migration:** imported `wiki.trace` now returns `messages` containing selected
+  text and source links instead of raw `records`. Use `wiki.traceLines` to retrieve
+  exact source records, or the existing source-page HTTP API without
+  `view=conversation`. External providers must implement the updated range and
+  attachment contract in `docs/external-evidence.md` before upgrading.
+
 ## 0.1.2 — 2026-09-11
 
 Compatible WebMCP fixes and additions; no content migration or automatic writer activation.

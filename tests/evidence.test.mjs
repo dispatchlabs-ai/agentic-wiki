@@ -173,3 +173,39 @@ test("captured media never starts remote image requests and evidence records rem
   });
   assert.equal(recorded.length, 2);
 });
+
+test("progressive evidence API forwards ranges and keeps previews opt-in", async (t) => {
+  const { get, backend } = await app(t);
+  const route = `/api/traces/${evidenceId}.json`;
+  const dialogue = JSON.parse((await get(route)).body);
+  assert.ok(
+    dialogue.messages.every((m) => ["user", "assistant"].includes(m.role)),
+  );
+  assert.equal(dialogue.messages[0].attachments[0].preview, undefined);
+  const range =
+    "kind=tool&after=2026-01-01T10:01:00Z&before=2026-01-01T10:02:00Z";
+  const tool = JSON.parse((await get(route + "?" + range)).body);
+  assert.equal(tool.messages[0].text, "Recorded tool output");
+  assert.ok(
+    backend.state.requests.some(
+      (r) => r.includes("after=") && r.includes("before="),
+    ),
+  );
+  assert.equal(
+    JSON.parse(
+      (await get(route + "?kind=tool&before=2026-01-01T10:01:00Z")).body,
+    ).total,
+    0,
+  );
+  for (const q of [
+    "after=tomorrow",
+    "after=2026-01-01T10:00:00",
+    "after=2026-01-02T00:00:00Z&before=2026-01-01T00:00:00Z",
+  ])
+    assert.equal((await get(route + "?" + q)).status, 400);
+  const html = await get(
+    `/conversations/${evidenceId}/?after=2026-01-01T09:00:00Z&limit=1`,
+  );
+  assert.match(html.body, /offset=1/);
+  assert.match(html.body, /after=2026-01-01T09%3A00%3A00Z/);
+});

@@ -61,3 +61,26 @@ Structured article evidence remains distinct, including multiple quotes from one
 URL; source anchors and task state metadata are preserved. Existing conversation
 fragments are resolved through event aliases, including events on later pages.
 This adapter does not add ingestion, authentication, OCR or Office document rendering.
+
+## Progressive disclosure
+
+Default trace reads return only user prompts and assistant responses with original
+text, source identities and attachment metadata. Tool calls/results, recorded
+thinking/reasoning, context and analysis require an explicit category or cited
+event request. `wiki.file` expands attachment content. The human conversation
+reader explicitly requests `attachments=preview` for its embedded previews.
+
+`after` and `before` accept ISO 8601 timestamps with a timezone. The interval is
+inclusive at `after`, exclusive at `before`. Whole-conversation analysis rejects
+time filters because its aggregate measurements are not event windows. Providers must filter before applying
+page/offset/limit, echo the bounds, and reject invalid or reversed intervals.
+Undated events are excluded only when a range is specified; `undatedCount` reports
+the category's undated events so callers can request them without a range. An
+event outside the range returns `eventFound: false` without changing that range.
+Category counts disclose availability without returning optional event bodies.
+Pagination must retain the range and page size. Event bodies are never summarized
+or silently shortened. Original files remain accessible through explicit file reads.
+
+For example, first call `wiki.trace` with `{id}`. Then request
+`{id, kind: "tool", after: "2026-01-01T10:00:00Z", before: "2026-01-01T10:05:00Z"}`.
+The same disclosure contract should be used by any future standalone MCP transport.

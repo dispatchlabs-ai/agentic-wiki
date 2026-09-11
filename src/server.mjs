@@ -1,3 +1,4 @@
+import { disclosureOptions } from "./trace-disclosure.mjs";
 import { EvidenceClient } from "./evidence-client.mjs";
 import {
   evidenceCatalog,
@@ -328,6 +329,8 @@ export function createWiki({
         if (conversation) {
           const params = Object.fromEntries(url.searchParams);
           if (conversation[2]) params.kind = conversation[2];
+          if (!conversation[2] && !conversation[3])
+            params.attachments = "preview";
           const data = await evidence.read(
             conversation[1] || conversation[3],
             params,
@@ -495,6 +498,18 @@ export function createWiki({
         if (!Number.isSafeInteger(page) || page < 1)
           return send(400, { error: "Invalid trace page" });
         try {
+          if (
+            traceRoute[2] &&
+            url.searchParams.get("view") === "conversation"
+          ) {
+            const result = await traceStore.readDisclosure(
+              traceRoute[2],
+              disclosureOptions(url.searchParams),
+            );
+            return result
+              ? send(200, result)
+              : send(404, { error: "Unknown trace" });
+          }
           const result = await traceStore.read(
             traceRoute[1] || traceRoute[2],
             page,
@@ -520,7 +535,10 @@ export function createWiki({
           const { html, ...data } = result;
           return send(200, data);
         } catch (e) {
-          return send(503, { error: e.message });
+          return send(e instanceof WikiError ? e.status : 503, {
+            error: e.message,
+            code: e instanceof WikiError ? e.code : "TRACE_UNAVAILABLE",
+          });
         }
       }
       if (url.pathname === "/api/articles/health.json") {

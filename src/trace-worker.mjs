@@ -1,4 +1,5 @@
 // @ts-check
+import { disclose } from "./trace-disclosure.mjs";
 import { WikiError } from "./errors.mjs";
 import { spoolTraceLines } from "./trace-lines.mjs";
 import fs from "node:fs";
@@ -43,8 +44,16 @@ async function renderEvent(event, id, positionByLine) {
   return `<section id="line-${line}" class="trace-event" data-kind="${escape(kind)}">${notice}${!["user", "assistant"].includes(kind) || event.mirrorOf || event.superseded ? `<details><summary>${heading}</summary>${body}</details>` : `<h2>${heading}</h2>${body}`}</section>`;
 }
 /** @param {import("./contracts.mjs").WorkerRequest} request
- * @returns {Promise<import("./contracts.mjs").RenderedTrace|import("./contracts.mjs").SpoolResult|null>} */
-async function run({ root, metadata, page, start, end, directory }) {
+ * @returns {Promise<import("./contracts.mjs").RenderedTrace|import("./contracts.mjs").DisclosedTrace|import("./contracts.mjs").SpoolResult|null>} */
+async function run({
+  root,
+  metadata,
+  page,
+  start,
+  end,
+  directory,
+  disclosure,
+}) {
   if (start !== undefined)
     return spoolTraceLines(root, metadata, start, end, directory);
   const filename = path.join(root, metadata.id, "source.jsonl");
@@ -58,6 +67,7 @@ async function run({ root, metadata, page, start, end, directory }) {
     throw new Error("Trace format mismatch");
   const events = project(records, metadata.format),
     pages = Math.max(1, Math.ceil(events.length / PAGE_SIZE));
+  if (disclosure) return disclose(events, metadata.id, disclosure);
   if (page > pages) return null;
   const selected = events.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     positions = new Map(events.map((event, index) => [event.line, index]));

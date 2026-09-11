@@ -93,6 +93,30 @@ test("native WebMCP reads, paginates, previews and inspects originals", async ({
       })
     ).total,
   ).toBe(1);
+  const dialogue = await call(page, "wiki.trace", { id: evidenceId });
+  expect(
+    dialogue.messages.every((m) => ["user", "assistant"].includes(m.role)),
+  ).toBe(true);
+  expect(dialogue.messages[0].attachments[0]).not.toHaveProperty("preview");
+  const activity = await call(page, "wiki.trace", {
+    id: evidenceId,
+    kind: "tool",
+    after: "2026-01-01T10:01:00Z",
+    before: "2026-01-01T10:02:00Z",
+  });
+  expect(activity.messages[0].text).toBe("Recorded tool output");
+  expect(
+    (
+      await call(page, "wiki.trace", {
+        id: evidenceId,
+        kind: "tool",
+        before: "2026-01-01T10:01:00Z",
+      })
+    ).messages,
+  ).toHaveLength(0);
+  expect(
+    await call(page, "wiki.trace", { id: evidenceId, after: "yesterday" }),
+  ).toMatchObject({ isError: true, status: 400 });
   const next = await call(page, "wiki.trace", { id: evidenceId, page: 2 });
   expect(next.offset).toBe(100);
   expect(next.messages).toHaveLength(2);

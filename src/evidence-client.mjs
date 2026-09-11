@@ -120,10 +120,42 @@ export class EvidenceClient {
       offset > 1000000 ||
       String(query.event || "").length > 300 ||
       Object.keys(query).some(
-        (k) => !["kind", "offset", "limit", "event"].includes(k),
+        (k) =>
+          ![
+            "kind",
+            "offset",
+            "limit",
+            "event",
+            "after",
+            "before",
+            "attachments",
+          ].includes(k),
       )
     )
       throw new WikiError("INVALID_TRACE_PAGE", "Invalid evidence page");
+    const validTime = (v) =>
+      !v ||
+      (typeof v === "string" &&
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+          v,
+        ) &&
+        Number.isFinite(Date.parse(v)) &&
+        new Date(v.slice(0, 10) + "T00:00:00Z")
+          .toISOString()
+          .startsWith(v.slice(0, 10)));
+    if (
+      (query.kind === "analysis" && (query.after || query.before)) ||
+      !validTime(query.after) ||
+      !validTime(query.before) ||
+      (query.after &&
+        query.before &&
+        Date.parse(query.after) >= Date.parse(query.before)) ||
+      !["metadata", "preview"].includes(query.attachments || "metadata")
+    )
+      throw new WikiError(
+        "INVALID_TRACE_PAGE",
+        "Invalid evidence range or attachments",
+      );
     if (page !== undefined) {
       const number = Number(page),
         position = (number - 1) * limit;

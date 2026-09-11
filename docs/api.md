@@ -231,3 +231,15 @@ reads `GET /api/files/ASSET.json`: `{attachment}` includes availability, metadat
 an optional shortened text preview, and original/download URLs. Binary originals
 remain separate streamed media responses, including Range support; tool results
 do not inline arbitrary binary files. These actions do not enable article editing.
+
+## Progressive imported-trace reads
+
+`wiki.trace` defaults to original user/assistant text only. It uses
+`/api/traces/:id.json?view=conversation`, with `kind=dialogue|tool|reasoning|context`,
+optional timezone-qualified ISO `after` (inclusive) and `before` (exclusive), and
+`page` (100 selected events per page). Filtering precedes pagination; counts and
+`undatedCount` explain what can be expanded. Mixed pi messages expose their text
+blocks as dialogue and tool/thinking blocks only in the explicitly requested
+category. Source URLs retain original line identities and source-page numbering.
+Use `wiki.traceLines` for exact original records. The legacy JSON source-page API
+without `view=conversation` and human trace pages retain their original behavior.
