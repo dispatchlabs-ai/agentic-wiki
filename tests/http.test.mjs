@@ -822,3 +822,53 @@ test("provenance API, WebMCP and human pages preserve paginated citations", asyn
   );
   assert.equal((await request(hit.provenance_url + "&limit=101")).status, 400);
 });
+
+test("expensive read-only previews leave article requests responsive", async (t) => {
+  const { request, repo } = await server(t, { write: false });
+  const head = git(repo, ["rev-parse", "HEAD"]);
+  const body = "|a|b|c|d|\n|-|-|-|-|\n" + "|x|y|z|w|\n".repeat(5000);
+  const preview = request("/api/articles/preview", {
+    method: "POST",
+    headers: { Origin: "http://wiki.test", "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+  });
+  // Give the draft a head start. An in-process renderer blocks this timer and
+  // the subsequent read until it has finished parsing the entire table.
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const article = request("/api/articles/guide/current.json");
+  assert.equal(
+    await Promise.race([
+      article.then(() => "article"),
+      preview.then(() => "preview"),
+    ]),
+    "article",
+  );
+  assert.equal((await article).status, 200);
+  const response = await preview;
+  // Faster runtimes may finish within the budget; either outcome must leave
+  // the article available first. Deterministic deadline tests use a stalled worker.
+  if (response.status === 200)
+    assert.match((await response.json()).html, /<table/);
+  else {
+    assert.equal(response.status, 503);
+    assert.ok(
+      ["PREVIEW_TIMEOUT", "PREVIEW_FAILED"].includes(
+        (await response.json()).code,
+      ),
+    );
+  }
+  assert.equal(git(repo, ["rev-parse", "HEAD"]), head);
+  assert.equal(
+    (
+      await request("/api/articles/preview", {
+        method: "POST",
+        headers: {
+          Origin: "http://wiki.test",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ body: "**Still available**" }),
+      })
+    ).status,
+    200,
+  );
+});

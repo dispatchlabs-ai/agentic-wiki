@@ -1,0 +1,117 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import http from "node:http";
+import { once } from "node:events";
+import {
+  McpApiClient,
+  McpResourceResult,
+  MCP_INLINE_BYTES,
+} from "../src/mcp-response.mjs";
+
+async function bridge(t, handler, options) {
+  const server = http.createServer(handler);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const client = new McpApiClient(server, "https://wiki.test", options);
+  t.after(async () => {
+    client.close();
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  });
+  return client;
+}
+
+test("large known-length MCP reads become resources without waiting for the body", async (t) => {
+  let disconnected;
+  const closed = new Promise((resolve) => {
+    disconnected = resolve;
+  });
+  const client = await bridge(t, (req, res) => {
+    assert.equal(req.headers.host, "wiki.test");
+    res.on("close", disconnected);
+    res.writeHead(200, { "Content-Length": MCP_INLINE_BYTES + 1 });
+    res.flushHeaders(); // Deliberately never send the body.
+  });
+  const result = await client.request(
+    "/api/traces/example/lines.json?start=1&end=99",
+  );
+  assert.ok(result instanceof McpResourceResult);
+  assert.equal(
+    result.uri,
+    "https://wiki.test/api/traces/example/lines.json?start=1&end=99",
+  );
+  await closed;
+  assert.equal(client.pending.size, 0);
+});
+
+test("chunked responses enforce the inline byte budget and small responses remain JSON", async (t) => {
+  let sent = 0;
+  let disconnected;
+  const closed = new Promise((resolve) => {
+    disconnected = resolve;
+  });
+  const client = await bridge(t, (req, res) => {
+    if (req.url === "/api/small") return res.end('{"text":"ok"}');
+    res.writeHead(200);
+    const timer = setInterval(() => {
+      sent += 65536;
+      res.write(Buffer.alloc(65536, 120));
+    }, 1);
+    res.on("close", () => {
+      clearInterval(timer);
+      disconnected();
+    });
+  });
+  assert.deepEqual(await client.request("/api/small"), { text: "ok" });
+  assert.ok((await client.request("/api/large")) instanceof McpResourceResult);
+  await closed;
+  assert.ok(sent >= MCP_INLINE_BYTES);
+  assert.ok(sent < 2 * MCP_INLINE_BYTES, `upstream transferred ${sent} bytes`);
+});
+
+test("oversized errors and writes never become successful resource links", async (t) => {
+  const client = await bridge(t, (req, res) => {
+    res.writeHead(req.url === "/api/error" ? 500 : 200, {
+      "Content-Length": MCP_INLINE_BYTES + 1,
+    });
+    res.flushHeaders();
+  });
+  for (const [route, draft] of [
+    ["/api/error", undefined],
+    ["/api/write", { operation_id: "retry-same" }],
+  ])
+    await assert.rejects(client.request(route, draft), {
+      code: "MCP_RESPONSE_TOO_LARGE",
+      status: 503,
+    });
+});
+
+test("MCP bridge bounds concurrent requests, deadlines and shutdown", async (t) => {
+  const client = await bridge(
+    t,
+    (req, res) => {
+      if (req.url === "/api/ok") res.end('{"ok":true}');
+    },
+    { maxConcurrent: 1, timeout: 100 },
+  );
+  const slow = assert.rejects(client.request("/api/hang"), {
+    code: "MCP_TIMEOUT",
+    status: 503,
+  });
+  await assert.rejects(client.request("/api/ok"), {
+    code: "MCP_BUSY",
+    status: 503,
+  });
+  await slow;
+  assert.deepEqual(await client.request("/api/ok"), { ok: true });
+  const pending = assert.rejects(client.request("/api/hang"), {
+    code: "MCP_CLOSED",
+    status: 503,
+  });
+  client.close();
+  await pending;
+  await assert.rejects(client.request("/api/ok"), {
+    code: "MCP_CLOSED",
+    status: 503,
+  });
+});

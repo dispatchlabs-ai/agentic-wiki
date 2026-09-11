@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Isolate draft previews in a bounded worker pool with queue-inclusive deadlines,
+  worker heap/output limits, and cancellation on disconnect. Article serving stays
+  responsive during expensive previews, including on read-only instances.
+- Bound MCP loopback concurrency, response buffering and request duration. Large
+  successful reads return a resource link to complete HTTP JSON; originals remain
+  available without truncation. Errors and writes never become GET resource links.
+- **Client migration:** MCP callers must handle resource-link results as well as
+  inline JSON. The notice includes the complete-result URL; fetch it using the same
+  access credentials or explicitly request a smaller range. See `docs/api.md`.
+
 ## 0.2.2 — 2026-09-11
 
 - Serve regular MCP over Streamable HTTP at `/mcp` in the existing wiki process.

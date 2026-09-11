@@ -37,9 +37,28 @@ article-only search or original trace/catalog reads. See [trace health and recov
 Connect a Streamable HTTP client to `${WIKI_ORIGIN}/mcp`. The existing wiki
 process serves this stateless endpoint; no separate service or browser is needed.
 The official MCP SDK handles initialization, discovery, schema validation and
-protocol errors. Tool results contain one text content block with JSON matching
-the HTTP API, without a duplicate structured payload. API failures set MCP
-`isError` and retain `state`, `status`, `code` and `error` inside that JSON.
+protocol errors. Small tool results contain one text content block with JSON
+matching the HTTP API, without a duplicate structured payload. API failures set
+MCP `isError` and retain `state`, `status`, `code` and `error` inside that JSON.
+
+The loopback bridge admits at most four simultaneous API calls, with a 30-second
+whole-call deadline and a 1 MiB inline JSON budget. A successful GET larger than
+that budget returns a short JSON notice (`state: "resource"`, `url`, `message`)
+and an MCP `resource_link` to the complete HTTP API result. The bridge stops
+reading as soon as the size is known, including chunked responses. It does not
+parse or serialize the large body. Follow the URL with the same proxy credentials,
+or explicitly request a smaller line range, page or text window. These links use
+the ordinary HTTP API, not MCP `resources/read`; no anonymous download route or
+separate copy of private content is created. Immutable trace URLs preserve the
+selected snapshot/range; mutable queries are evaluated again when fetched.
+
+**Client migration:** accept both inline JSON and `resource_link` results. A
+resource notice is not the article/trace payload itself. No source content is
+truncated, and direct HTTP/WebMCP reads retain their existing behavior. Oversized
+errors and POST responses fail with `MCP_RESPONSE_TOO_LARGE` (503) rather than
+returning a misleading GET link. Saturation and deadlines return `MCP_BUSY` and
+`MCP_TIMEOUT` (503). Retry an ambiguous save with identical input and operation ID;
+closing the MCP connection does not roll back an already committed edit.
 
 MCP and WebMCP use one tool catalog. Discovery reflects the archive provider and
 `WIKI_WRITE`; read-only deployments omit `wiki.save`. Trace reads default to
@@ -62,6 +81,19 @@ The authoring discovery response includes the endpoint URL and transport.
 and Host, and JSON content type. The request is limited to 512,000 bytes and the
 Markdown body to 100,000 characters. Preview changes no files, revisions, or
 receipts.
+
+Draft Markdown is rendered in disposable workers, separate from the HTTP event
+loop. At most two previews run and eight wait; the five-second deadline includes
+queue time. Each worker has a 128 MiB old-generation heap limit and checks a 2 MiB
+rendered-HTML limit before transferring output. Disconnects cancel queued/running
+work, and a terminating worker keeps its slot until it exits. These limits also
+apply to MCP previews and to read-only instances.
+
+Saturation returns `PREVIEW_BUSY` (503), deadline expiry `PREVIEW_TIMEOUT` (503),
+worker failure `PREVIEW_FAILED` (503), and oversized rendered output
+`PREVIEW_TOO_LARGE` (413). Simplify the draft after a resource-limit failure;
+retry a busy renderer later. The original draft is unchanged. Large POST results
+are also subject to MCP's inline budget when preview is called through MCP.
 
 ## Save an article
 

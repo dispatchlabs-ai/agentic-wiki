@@ -1,3 +1,7 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { importTrace } from "../src/traces.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
@@ -223,4 +227,58 @@ test("modern MCP discovery and calls work without persistent sessions", async (t
     (await call("wiki.read", { id: "guide" })).value.body,
     /Start here/,
   );
+});
+
+test("large MCP trace reads link to complete originals while explicit small ranges stay inline", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "wiki-mcp-large-test-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const source = path.join(root, "input.jsonl");
+  const header = { type: "session_meta", payload: { id: "synthetic-large" } };
+  const event = {
+    type: "response_item",
+    payload: { text: "完整😀".repeat(150000) },
+  };
+  const raw = JSON.stringify(event);
+  fs.writeFileSync(source, JSON.stringify(header) + "\n" + raw + "\n");
+  const metadata = importTrace(root, source, "Synthetic large trace");
+  const { client, call, url, fetchWiki } = await setup(t, false, {
+    traces: root,
+  });
+  const result = await client.callTool({
+    name: "wiki.traceLines",
+    arguments: { id: metadata.id, start: 1, end: 2 },
+  });
+  assert.equal(result.isError, undefined);
+  assert.ok(JSON.stringify(result).length < 3000);
+  assert.equal(JSON.parse(result.content[0].text).state, "resource");
+  const resource = result.content.find((item) => item.type === "resource_link");
+  assert.equal(resource.mimeType, "application/json");
+  assert.equal(
+    resource.uri,
+    `http://wiki.test/api/traces/${metadata.id}/lines.json?start=1&end=2`,
+  );
+  const target = new URL(resource.uri);
+  const response = await fetchWiki(
+    new URL(target.pathname + target.search, url),
+  );
+  assert.equal(response.status, 200);
+  const full = await response.json();
+  assert.equal(full.lines.length, 2);
+  assert.equal(full.lines[1].raw, raw);
+  assert.deepEqual(full.lines[1].value, event);
+  assert.equal(full.nextStart, null);
+  const small = await call("wiki.traceLines", {
+    id: metadata.id,
+    start: 1,
+    end: 1,
+  });
+  assert.equal(small.response.content.length, 1);
+  assert.deepEqual(small.value.lines[0].value, header);
+  const missing = await call("wiki.traceLines", {
+    id: metadata.id,
+    start: 10,
+    end: 11,
+  });
+  assert.equal(missing.response.isError, true);
+  assert.equal(missing.value.status, 404);
 });
