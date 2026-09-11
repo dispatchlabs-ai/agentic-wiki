@@ -49,3 +49,17 @@ test("optional windows reassemble exact Unicode text and leave full reads untouc
   ])
     assert.throws(() => textWindowOptions(new URLSearchParams(q)), /Invalid/);
 });
+
+test("optional chunks do not repeat large body copies in supplemental details", () => {
+  const source = {
+    text: "Original output",
+    details: { alternate_recorded_text: "Original output".repeat(1000) },
+    line: 4,
+  };
+  const chunk = textWindow(source, { textLimit: 3 });
+  assert.equal(chunk.text, "Ori");
+  assert.equal(chunk.details, undefined);
+  assert.deepEqual(chunk.omittedFields, ["details"]);
+  assert.equal(chunk.line, 4);
+  assert.equal(textWindow(source, {}).details, source.details);
+});

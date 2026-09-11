@@ -32,8 +32,10 @@ export function textWindow(message, options) {
     position += character.length;
   }
   const returned = Math.max(0, Math.min(total - offset, limit ?? total));
+  const { details, ...metadata } = message;
   return {
-    ...message,
+    ...metadata,
+    ...(details !== undefined ? { omittedFields: ["details"] } : {}),
     text: text.slice(start, end),
     textWindow: {
       offset,

@@ -94,7 +94,9 @@ points (combining marks count separately). Offset alone returns the remainder;
 `textWindow: {offset, returnedChars, totalChars, nextTextOffset, unit}` when a
 window is requested. Use `nextTextOffset` explicitly to continue, or omit both
 parameters to retrieve the full text. An offset at or beyond the end returns an
-empty chunk and null continuation. No truncation or summarization is imposed.
+empty chunk and null continuation. No truncation or summarization is imposed. Supplemental `details` can contain
+duplicate full bodies, so text-window responses omit that field and explicitly
+report `omittedFields: ["details"]`; an ordinary full read retains it.
 
 Message pagination and time windows still select events; text windows select a
 portion of each selected event. For a single event, use `event` (the original wiki
