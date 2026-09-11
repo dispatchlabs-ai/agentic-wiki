@@ -1,7 +1,7 @@
 # Versioning and releases
 
 Agentic Wiki follows [Semantic Versioning 2.0.0](https://semver.org/).
-The public contract covers the documented HTTP and WebMCP APIs, CLI commands,
+The public contract covers the documented HTTP, MCP and WebMCP APIs, CLI commands,
 configuration, article format, and persisted trace and edit-receipt formats.
 Internal modules and disposable indexes/caches are not public APIs. Raising the
 minimum runtime or dropping a supported platform is a breaking change.

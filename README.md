@@ -3,7 +3,7 @@
 Agentic Wiki is an MIT-licensed open-source project created by Chris Reynolds,
 cofounder of **Dispatch Labs AI**.
 
-**Status: 0.2.1 — initial development source release.**
+**Status: 0.2.2 — initial development source release.**
 See the [changelog](CHANGELOG.md) and [versioning and release policy](docs/releases.md).
 The public API is still evolving; this is not a production-support commitment.
 
@@ -106,10 +106,12 @@ A consumer workspace can point agents here with one `AGENTS.md` line:
 
 **WebMCP requires a compatible browser integration.** The page registers native
 `wiki.search`, `wiki.read`, `wiki.history`, `wiki.traceSearch`, `wiki.traceProvenance`, `wiki.traceSessions`, `wiki.traceLines`, `wiki.traces`, `wiki.trace`, `wiki.preview`, and, when enabled, `wiki.save` tools
-through `document.modelContext` (with `navigator.modelContext` fallback). It is
-not a standalone MCP server. External evidence adds `wiki.file` and omits
+through `document.modelContext` (with `navigator.modelContext` fallback). Regular MCP clients connect to the same tools at
+`https://wiki.example.org/mcp` using Streamable HTTP. External evidence adds `wiki.file` and omits
 imported-archive-only tools. Ordinary browsers still support reading, search,
-and the editor form. Non-browser agents can use the underlying HTTP APIs directly.
+and the editor form. Both MCP transports share schemas and API operations.
+The `WIKI_WRITE` setting controls `wiki.save` for both; enabling MCP does not enable writes.
+Non-browser agents can also use the underlying HTTP APIs directly.
 
 See [API and editing](docs/api.md) for request shapes, retry semantics, and errors.
 

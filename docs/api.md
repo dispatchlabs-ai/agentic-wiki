@@ -32,6 +32,29 @@ Health also reports article storage/index and trace archive/search components.
 A configured unavailable trace index degrades overall health without preventing
 article-only search or original trace/catalog reads. See [trace health and recovery](traces.md#degraded-operation).
 
+## Regular MCP
+
+Connect a Streamable HTTP client to `${WIKI_ORIGIN}/mcp`. The existing wiki
+process serves this stateless endpoint; no separate service or browser is needed.
+The official MCP SDK handles initialization, discovery, schema validation and
+protocol errors. Tool results contain one text content block with JSON matching
+the HTTP API, without a duplicate structured payload. API failures set MCP
+`isError` and retain `state`, `status`, `code` and `error` inside that JSON.
+
+MCP and WebMCP use one tool catalog. Discovery reflects the archive provider and
+`WIKI_WRITE`; read-only deployments omit `wiki.save`. Trace reads default to
+dialogue and accept the same category, time and optional text-window controls.
+Calls use the existing loopback HTTP API, including the same writer, revision
+checks, atomic updates, evidence verification and retry receipts.
+
+Requests must target the configured Host. A supplied Origin must exactly match
+`WIKI_ORIGIN`; native clients may omit Origin. Cross-site browser requests are
+rejected and no CORS access is granted. POST bodies are limited to 512,000 bytes.
+Responses carry JSON results (legacy clients may receive SSE framing); the
+endpoint does not provide unsolicited notifications or persistent sessions. It inherits the wiki's access boundary and has no built-in
+user authentication. Keep existing proxy authentication/access rules on `/mcp`.
+The authoring discovery response includes the endpoint URL and transport.
+
 ## Preview a draft
 
 `POST /api/articles/preview` accepts `{ "body": "Markdown" }` and returns

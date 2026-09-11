@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2 — 2026-09-11
+
+- Serve regular MCP over Streamable HTTP at `/mcp` in the existing wiki process.
+- Share tool schemas and operations with WebMCP, including progressive trace
+  disclosure, provider-specific discovery, structured errors and write safeguards.
+- Validate Host, browser Origin and request size; preserve read-only defaults.
+- Verify discovery, reads, previews, save retries, conflicts and external trace
+  windows through an official MCP client against synthetic repositories.
+
 ## 0.2.1 — 2026-09-11
 
 - Added optional `textOffset`/`textLimit` trace text windows. Full selected event
