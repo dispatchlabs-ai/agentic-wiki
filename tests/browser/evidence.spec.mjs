@@ -124,3 +124,42 @@ for (const width of [390, 1440])
       page.getByRole("heading", { name: "notes.md", exact: true }).first(),
     ).toBeVisible();
   });
+
+for (const width of [390, 1440])
+  test(`attachment envelopes are readable and source-faithful at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    backend.state.harness = "codex";
+    await page.goto(base + `/conversations/${evidenceId}/#event-2`);
+    const message = page.locator("#event-2");
+    await expect(message.locator(":scope > .prose")).toHaveText(
+      "Please inspect this diagram",
+    );
+    await expect(message.locator(".file-card")).toHaveCount(1);
+    await expect(message.locator("img")).toBeVisible();
+    const heading = message.locator(".prose h1");
+    expect(
+      await heading.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+    ).toBeLessThanOrEqual(24);
+    await expect(message.locator(".original-message pre")).toBeHidden();
+    await message.getByText("Source location", { exact: true }).click();
+    await message
+      .getByText("Original recorded message", { exact: true })
+      .click();
+    await expect(message.locator(".original-message pre")).toContainText(
+      "# Files mentioned by the user:",
+    );
+    await expect(message.locator(".original-message pre")).toContainText(
+      "<image name=[Image #1]",
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBeTruthy();
+    await message.getByText("Source location", { exact: true }).click();
+    await message.screenshot({
+      path: `.runtime/responsive-review/attachment-fix-${width}.png`,
+    });
+  });
