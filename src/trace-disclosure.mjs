@@ -29,6 +29,8 @@ export function disclosureOptions(params) {
   return { kind, after, before, page };
 }
 export function disclose(events, id, options) {
+  const eventTime = (m) =>
+    typeof m.timestamp === "number" ? m.timestamp : Date.parse(m.timestamp);
   const items = events.flatMap((event, index) => {
     const { value, blocks, ...metadata } = event;
     const base = {
@@ -72,9 +74,9 @@ export function disclose(events, id, options) {
     (m) =>
       category(m) === kind &&
       ((!after && !before) ||
-        (Number.isFinite(Date.parse(m.timestamp)) &&
-          (!after || Date.parse(m.timestamp) >= Date.parse(after)) &&
-          (!before || Date.parse(m.timestamp) < Date.parse(before)))),
+        (Number.isFinite(eventTime(m)) &&
+          (!after || eventTime(m) >= Date.parse(after)) &&
+          (!before || eventTime(m) < Date.parse(before)))),
   );
   return {
     id,
@@ -86,7 +88,7 @@ export function disclose(events, id, options) {
     total: selected.length,
     nextPage: page * 100 < selected.length ? page + 1 : null,
     undatedCount: items.filter(
-      (m) => category(m) === kind && !Number.isFinite(Date.parse(m.timestamp)),
+      (m) => category(m) === kind && !Number.isFinite(eventTime(m)),
     ).length,
     counts: Object.fromEntries(
       ["dialogue", "tool", "reasoning", "context"].map((k) => [

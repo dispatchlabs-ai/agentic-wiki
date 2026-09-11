@@ -82,3 +82,30 @@ test("range selection precedes paging and preserves original source coordinates"
   ])
     assert.throws(() => disclosureOptions(new URLSearchParams(q)), /Invalid/);
 });
+
+test("recorded numeric pi timestamps remain eligible for time windows", () => {
+  const stamp = Date.parse("2026-01-01T10:00:00Z");
+  const events = project(
+    [
+      {
+        line: 1,
+        value: {
+          type: "message",
+          message: { role: "user", timestamp: stamp, content: "Question" },
+        },
+      },
+    ],
+    "pi",
+  );
+  const result = disclose(
+    events,
+    "a".repeat(64),
+    disclosureOptions(
+      new URLSearchParams(
+        "after=2026-01-01T10:00:00Z&before=2026-01-01T10:01:00Z",
+      ),
+    ),
+  );
+  assert.equal(result.messages[0].timestamp, stamp);
+  assert.equal(result.undatedCount, 0);
+});
