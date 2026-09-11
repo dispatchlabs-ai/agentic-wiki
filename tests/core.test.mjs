@@ -176,7 +176,7 @@ test("sanitized rendering, heading anchors and link discovery agree", async () =
   const body =
     "## A heading\nSee [[guide|The guide]].\n\n## A heading\n\n`[[code-only]]`\n\n<script>alert(1)</script>\n\n[bad](javascript:alert%281%29)\n\n<img src=x onerror=alert(1)>";
   const html = await renderMarkdown(body);
-  assert.doesNotMatch(html, /<script|onerror|href="javascript:/);
+  assert.doesNotMatch(html, /<script|<[^>]+\bonerror=|href="javascript:/);
   assert.match(html, /href="\/wiki\/guide\/"/);
   assert.deepEqual(references(body), ["guide"]);
   for (const s of sections(body).filter((s) => s.anchor))

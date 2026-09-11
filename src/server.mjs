@@ -1,3 +1,9 @@
+import { EvidenceClient } from "./evidence-client.mjs";
+import {
+  evidenceCatalog,
+  evidenceView,
+  attachmentView,
+} from "./evidence-views.mjs";
 import { pipeline } from "node:stream/promises";
 import { WikiError } from "./errors.mjs";
 import http from "node:http";
@@ -38,9 +44,13 @@ export function createWiki({
   database = ":memory:",
   origin = "http://127.0.0.1:4317",
   traces = process.env.WIKI_TRACES || null,
+  evidenceUrl = process.env.WIKI_EVIDENCE_URL || null,
   write = false,
   push = false,
 } = {}) {
+  if (traces && evidenceUrl)
+    throw Error("Configure either WIKI_TRACES or WIKI_EVIDENCE_URL");
+  const evidence = evidenceUrl ? new EvidenceClient(evidenceUrl) : null;
   const traceStore = new TraceStore(traces);
   const wiki = new GitWiki(repo),
     index = new WikiSearch(database),
@@ -67,9 +77,13 @@ export function createWiki({
       error = indexError = e.message;
     }
   }
-  function htmlTraceSearch(query, options) {
+  async function htmlTraceSearch(query, options) {
     try {
-      return searchTraces(traces, query, options);
+      return evidence
+        ? await evidence.search(query, options)
+        : options.format === "claude"
+          ? { indexed: true, results: [], nextOffset: null }
+          : searchTraces(traces, query, options);
     } catch (e) {
       if (e instanceof WikiError && e.code === "INVALID_SEARCH") throw e;
       return {
@@ -94,7 +108,7 @@ export function createWiki({
         "X-Content-Type-Options": "nosniff",
         "X-Wiki-Commit": wiki.head,
         "Content-Security-Policy":
-          "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' https:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+          "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
       });
       if (value?.transport === "file") {
         return pipeline(fs.createReadStream(value.path), res).finally(() =>
@@ -214,6 +228,7 @@ export function createWiki({
       const asset = {
         "/assets/edit-contract.js": ["edit-contract.js", "text/javascript"],
         "/assets/client.js": ["client.js", "text/javascript"],
+        "/assets/search-results.js": ["search-results.js", "text/javascript"],
         "/assets/style.css": ["style.css", "text/css"],
         "/assets/theme.css": ["theme.css", "text/css"],
         "/assets/theme.js": ["theme.js", "text/javascript"],
@@ -224,12 +239,89 @@ export function createWiki({
           fs.readFileSync(path.join(assetRoot, asset[0]), "utf8"),
           asset[1],
         );
+      if (evidence) {
+        const media = url.pathname.match(
+          /^\/media\/([a-f0-9]{64}\.(?:png|jpg|gif|webp|pdf|bin))$/,
+        );
+        if (media) {
+          const upstream = await evidence.response(
+            "assets/" + media[1],
+            {},
+            req.headers.range ? { Range: req.headers.range } : {},
+          );
+          /** @type {import("node:http").OutgoingHttpHeaders} */
+          const headers = {};
+          for (const h of [
+            "content-type",
+            "content-length",
+            "content-range",
+            "accept-ranges",
+            "cache-control",
+          ])
+            if (upstream.headers.has(h)) headers[h] = upstream.headers.get(h);
+          headers["x-content-type-options"] = "nosniff";
+          headers["content-security-policy"] = "sandbox; default-src 'none'";
+          const download = url.searchParams.get("download");
+          if (download)
+            headers["content-disposition"] =
+              "attachment; filename*=UTF-8''" +
+              encodeURIComponent(download.slice(0, 240));
+          res.writeHead(upstream.status, headers);
+          if (upstream.body) await pipeline(upstream.body, res);
+          else res.end();
+          return;
+        }
+        const file = url.pathname.match(
+          /^\/files\/([a-f0-9]{64}\.(?:png|jpg|gif|webp|pdf|bin))\/$/,
+        );
+        if (file) {
+          const data = await evidence.attachment(file[1]);
+          return send(
+            200,
+            await attachmentView(file[1], data.attachment),
+            "text/html",
+          );
+        }
+        if (url.pathname === "/conversations/") {
+          res.writeHead(302, { Location: "/traces/" + url.search });
+          res.end();
+          return;
+        }
+        const conversation = url.pathname.match(
+          /^\/(?:conversations\/(chat-[a-f0-9]{24})\/(?:(dialogue|tool|thinking|reasoning|context|analysis)\.json)?|api\/traces\/(chat-[a-f0-9]{24})\.json)$/,
+        );
+        if (conversation) {
+          const params = Object.fromEntries(url.searchParams);
+          if (conversation[2]) params.kind = conversation[2];
+          const data = await evidence.read(
+            conversation[1] || conversation[3],
+            params,
+          );
+          if (conversation[2] || conversation[3]) return send(200, data);
+          return send(200, await evidenceView(data, wiki), "text/html");
+        }
+      }
       if (
         url.pathname === "/traces/" ||
         ["/api/traces/catalog.json", "/api/traces/sessions.json"].includes(
           url.pathname,
         )
       ) {
+        if (evidence) {
+          const q = url.searchParams.get("q") || "";
+          const options = {
+            format: url.searchParams.get("format") || "",
+            machine: url.searchParams.get("machine") || "",
+            offset: Number(url.searchParams.get("offset") || 0),
+            limit: Number(url.searchParams.get("limit") || 20),
+          };
+          const data = q.trim()
+            ? await evidence.search(q, options)
+            : await evidence.catalog(options);
+          return url.pathname.startsWith("/api/")
+            ? send(200, data)
+            : send(200, evidenceCatalog(url.searchParams, data), "text/html");
+        }
         if (url.pathname.startsWith("/api/")) {
           if (url.pathname.endsWith("catalog.json") && !url.search)
             return send(200, traceStore.catalog());
@@ -244,7 +336,7 @@ export function createWiki({
         const q = url.searchParams.get("q") || "";
         const result = !q.trim()
           ? { indexed: false, results: [], nextOffset: null }
-          : htmlTraceSearch(q, {
+          : await htmlTraceSearch(q, {
               offset: Number(url.searchParams.get("offset") || 0),
               format: url.searchParams.get("format") || "",
             });
@@ -306,12 +398,23 @@ export function createWiki({
       }
       if (url.pathname === "/api/traces/search") {
         try {
+          const options = {
+            limit: Number(url.searchParams.get("limit") || 20),
+            offset: Number(url.searchParams.get("offset") || 0),
+            format: url.searchParams.get("format") || "",
+            machine: url.searchParams.get("machine") || "",
+          };
           return send(
             200,
-            searchTraces(traces, url.searchParams.get("q") || "", {
-              limit: Number(url.searchParams.get("limit") || 20),
-              offset: Number(url.searchParams.get("offset") || 0),
-            }),
+            evidence
+              ? await evidence.search(url.searchParams.get("q") || "", options)
+              : options.format === "claude"
+                ? { indexed: true, results: [], nextOffset: null }
+                : searchTraces(
+                    traces,
+                    url.searchParams.get("q") || "",
+                    options,
+                  ),
           );
         } catch (e) {
           return send(e instanceof WikiError ? e.status : 503, {
@@ -392,6 +495,7 @@ export function createWiki({
           },
           traceArchive: traceStore.health(),
           traceSearch: traceSearchHealth(traces),
+          ...(evidence ? await evidence.health() : {}),
         };
         const degraded = Object.values(components).some(
           (c) => !["ready", "disabled"].includes(c.state),
@@ -417,14 +521,19 @@ export function createWiki({
             "wiki.read",
             "wiki.history",
             "wiki.traceSearch",
-            "wiki.traceProvenance",
-            "wiki.traceSessions",
-            "wiki.traceLines",
+            ...(!evidence
+              ? [
+                  "wiki.traceProvenance",
+                  "wiki.traceSessions",
+                  "wiki.traceLines",
+                ]
+              : []),
             "wiki.traces",
             "wiki.trace",
             ...(write ? ["wiki.save"] : []),
           ],
           write,
+          externalEvidence: !!evidence,
           access:
             "No user authentication. Default loopback, read-only. Place behind appropriate authentication for shared access.",
         });
@@ -440,18 +549,24 @@ export function createWiki({
             limit: Number(url.searchParams.get("limit") || 20),
             offset: Number(url.searchParams.get("offset") || 0),
             topic: url.searchParams.get("topic") || "",
+            state: url.searchParams.get("state") || "",
           });
         } catch (e) {
           return send(400, { error: e.message });
         }
         if (url.pathname.startsWith("/api/")) return send(200, result);
         const traceResult =
-          url.searchParams.get("type") === "articles"
+          url.searchParams.get("type") === "articles" ||
+          !(url.searchParams.get("q") || "").trim()
             ? { indexed: false, results: [], nextOffset: null }
-            : htmlTraceSearch(url.searchParams.get("q") || "", {
-                limit: 20,
-                offset: Number(url.searchParams.get("traceOffset") || 0),
-              });
+            : evidence && url.searchParams.get("sync") !== "1"
+              ? { indexed: false, results: [], nextOffset: null, pending: true }
+              : await htmlTraceSearch(url.searchParams.get("q") || "", {
+                  limit: 20,
+                  offset: Number(url.searchParams.get("traceOffset") || 0),
+                  format: url.searchParams.get("format") || "",
+                  machine: url.searchParams.get("machine") || "",
+                });
         return send(
           200,
           searchView(wiki, url.searchParams, result, traceResult),

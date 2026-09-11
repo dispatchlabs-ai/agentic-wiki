@@ -208,3 +208,6 @@ events returned 200 inline citations in a 70,260-byte JSON response (296 ms for
 search). All counts remained 1,000, and paging one event recovered all 1,000
 snapshot citations. Timing is a single local observation, not a latency guarantee;
 FTS candidate grouping still depends on the number of matching source records.
+
+See [existing archive integration](external-evidence.md) for the optional provider,
+its API differences, native conversation URLs, files, and concurrent search.

@@ -1,3 +1,4 @@
+import { articleResults, traceResults } from "../public/search-results.js";
 import { catalogOptions, sortedSnapshots, sessions } from "./trace-catalog.mjs";
 import {
   shell,
@@ -239,7 +240,7 @@ export function sourcesView(wiki, id, params) {
   const evidence = sources(p);
   return shell(
     `${p.title} sources`,
-    `${articleHeader(p, "Sources", { historical: !!rev })}<div class="layout"><div><h2>Supporting evidence</h2><p class="muted">Links recorded in this article’s Markdown and source metadata.</p>${evidence.length ? evidence.map((s, i) => `<section class="entry"><h3>${i + 1}. ${e(s.title)}</h3><p class="meta">${s.url.startsWith("/traces/") ? "Agent trace" : "Source link"}</p>${s.quote ? `<blockquote>${e(s.quote)}</blockquote>` : ""}<p>${link(s.url, "Open original passage")}</p><details><summary>Source details</summary><p class="meta">${e(s.url)}</p></details></section>`).join("") : empty("No source links are recorded in this revision.")}</div><aside class="sidebar"><h2>Article context</h2><p>Revision ${p.number} · ${date(p.created_at)}</p>${link(rev ? `/wiki/${id}/revision/${p.number}/` : p.url, "Read article")}</aside></div>`,
+    `${articleHeader(p, "Sources", { historical: !!rev })}<div class="layout"><div><h2>Supporting evidence</h2><p class="muted">Links recorded in this article’s Markdown and source metadata.</p>${evidence.length ? evidence.map((s, i) => `<section class="entry" id="source-${i + 1}"><h3>${i + 1}. ${e(s.title)}</h3><p class="meta">${s.url.startsWith("/traces/") ? "Agent trace" : "Source link"}</p>${s.quote ? `<blockquote>${e(s.quote)}</blockquote>` : ""}<p>${link(s.url, "Open original passage")}</p><details><summary>Source details</summary><p class="meta">${e(s.url)}</p></details></section>`).join("") : empty("No source links are recorded in this revision.")}</div><aside class="sidebar"><h2>Article context</h2><p>Revision ${p.number} · ${date(p.created_at)}</p>${link(rev ? `/wiki/${id}/revision/${p.number}/` : p.url, "Read article")}</aside></div>`,
     { active: "Topics" },
   );
 }
@@ -261,27 +262,34 @@ function traceProvenance(hit) {
   return `<details><summary>Seen in ${hit.snapshot_count} snapshots</summary>${list(hit.provenance.map((p) => link(p.url, `Imported ${date(p.imported_at)} · line ${p.line}`)))}${hit.provenance_nextOffset !== null ? `<p>${link(`/traces/provenance/?key=${hit.logical_key}`, "All source citations")}</p>` : ""}</details>`;
 }
 export function searchView(wiki, params, articles, traces) {
-  const q = params.get("q") || "",
-    type = ["articles", "traces"].includes(params.get("type"))
-      ? params.get("type")
-      : "all",
-    topic = params.get("topic") || "";
-  const resultEntry = (p, kind) =>
-    `<section class="entry"><p class="eyebrow">${e(kind)}</p><h2>${link(p.url, p.title)}</h2><p>${e(p.snippet)}</p>${kind === "Article" ? `<p class="meta">${e(p.topic)}</p>` : `<p>${link(p.url, `Open passage · line ${p.line}`)}</p>${traceProvenance(p)}`}</section>`;
+  const q = params.get("q") || "";
+  const type = ["articles", "traces"].includes(params.get("type"))
+    ? params.get("type")
+    : "all";
+  const state = params.get("state") || "",
+    topic = params.get("topic") || "",
+    format = params.get("format") || "",
+    machine = params.get("machine") || "";
+  const hidden = Object.entries({ type, state, topic, format, machine })
+    .map(([k, v]) => `<input type="hidden" name="${k}" value="${e(v)}">`)
+    .join("");
   return shell(
     "Search",
-    `<h1>Search the wiki</h1><form class="search-form" action="/search/" role="search"><label class="sr-only" for="search-query">Search query</label><input id="search-query" name="q" type="search" value="${e(q)}" maxlength="300" placeholder="Search articles and traces"><input type="hidden" name="type" value="${type}"><button>Search</button></form><nav class="tabs" aria-label="Search type">${[
+    `<h1>Search the wiki</h1><form class="search-form" action="/search/" role="search" data-live-search><label class="sr-only" for="search-query">Search query</label><input id="search-query" name="q" type="search" value="${e(q)}" maxlength="300" placeholder="Search articles and traces">${hidden}<button>Search</button></form><nav class="tabs" aria-label="Search type">${[
       ["all", "All"],
       ["articles", "Articles"],
       ["traces", "Traces"],
     ]
-      .map(
-        ([v, l]) =>
-          `<a href="${e(queryLink("/search/", { q, type: v }))}"${v === type ? ' aria-current="page"' : ""}>${l}</a>`,
-      )
+      .map(([v, l]) => {
+        const p = new URLSearchParams(params);
+        p.set("type", v);
+        p.delete("offset");
+        p.delete("traceOffset");
+        return `<a href="/search/?${e(p.toString())}"${v === type ? ' aria-current="page"' : ""}>${l}</a>`;
+      })
       .join(
         "",
-      )}</nav><div class="layout"><div>${type !== "traces" ? `<h2>Articles</h2><p class="meta">${articles.truncated ? "At least " : ""}${articles.total} matching articles</p>${articles.articles.length ? articles.articles.map((p) => resultEntry(p, "Article")).join("") : empty("No matching articles.")}${articles.nextOffset !== null ? `<p class="pagination">${link(queryLink("/search/", { q, type, topic, offset: articles.nextOffset, traceOffset: params.get("traceOffset") }), "More articles")}</p>` : ""}` : ""}${type !== "articles" ? `<h2>Traces</h2>${traces.error ? `<p class="notice warning" role="status">${e(traces.error)}</p>` : !q.trim() ? empty("Enter a search term to find trace dialogue.") : !traces.indexed ? empty("Trace dialogue search is not available for this archive yet.") : traces.results.length ? traces.results.map((p) => resultEntry(p, `${p.format} trace`)).join("") : empty("No matching trace passages.")}${traces.nextOffset !== null ? `<p class="pagination">${link(queryLink("/search/", { q, type, topic, offset: params.get("offset"), traceOffset: traces.nextOffset }), "More trace passages")}</p>` : ""}` : ""}</div><aside class="sidebar"><details data-responsive-details open><summary>Filter results</summary><form class="filter-form" action="/search/"><input type="hidden" name="q" value="${e(q)}"><label>Type<select name="type">${[
+      )}</nav><div class="layout"><div>${type !== "traces" ? `<h2>Articles</h2><div id="article-results" aria-live="polite">${articleResults(articles, params)}</div>` : ""}${type !== "articles" ? `<h2>Traces</h2><div id="trace-results" aria-live="polite"${traces.pending ? ' data-pending="true"' : ""}>${traceResults(traces, params)}</div>${traces.pending ? `<noscript>${link(queryLink("/search/", Object.fromEntries([...params.entries(), ["sync", "1"]])), "Load trace results")}</noscript>` : ""}` : ""}</div><aside class="sidebar"><details data-responsive-details open><summary>Filter results</summary><form class="filter-form" action="/search/"><input type="hidden" name="q" value="${e(q)}"><label>Type<select name="type">${[
       ["all", "All"],
       ["articles", "Articles"],
       ["traces", "Traces"],
@@ -289,7 +297,25 @@ export function searchView(wiki, params, articles, traces) {
       .map(([v, l]) => option(v, l, type))
       .join(
         "",
-      )}</select></label>${topicSelect(wiki, topic)}<p class="meta">Topic filters apply to articles.</p><button>Apply filters</button></form></details></aside></div>`,
+      )}</select></label>${topicSelect(wiki, topic)}<label>Task status<select name="state">${[
+      ["", "Any status"],
+      ["pending", "Pending"],
+      ["wip", "In progress"],
+      ["done", "Done"],
+    ]
+      .map(([v, l]) => option(v, l, state))
+      .join(
+        "",
+      )}</select></label><p class="meta">Topic and task status filter articles.</p><label>Trace harness<select name="format">${[
+      ["", "All"],
+      ["codex", "Codex"],
+      ["pi", "pi"],
+      ["claude", "Claude Code"],
+    ]
+      .map(([v, l]) => option(v, l, format))
+      .join(
+        "",
+      )}</select></label><label>Trace machine<input name="machine" value="${e(machine)}" maxlength="100" placeholder="Any machine"></label><button>Apply filters</button></form></details></aside></div>`,
     { className: "search-page" },
   );
 }

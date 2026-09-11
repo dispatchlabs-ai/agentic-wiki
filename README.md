@@ -3,7 +3,7 @@
 Agentic Wiki is an MIT-licensed open-source project created by Chris Reynolds,
 cofounder of **Dispatch Labs AI**.
 
-**Status: 0.1.0 — initial development source release.**
+**Status: 0.1.1 — initial development source release.**
 See the [changelog](CHANGELOG.md) and [versioning and release policy](docs/releases.md).
 The public API is still evolving; this is not a production-support commitment.
 
@@ -49,15 +49,16 @@ Then run this command from the engine checkout:
 WIKI_REPO=/absolute/path/to/content npm start
 ```
 
-| Setting         | Default                 | Purpose                                                  |
-| --------------- | ----------------------- | -------------------------------------------------------- |
-| `WIKI_REPO`     | Required                | Content repository, independent of this engine           |
-| `PORT`          | `4317`                  | Loopback listener port                                   |
-| `WIKI_ORIGIN`   | `http://127.0.0.1:PORT` | Exact allowed origin and Host                            |
-| `WIKI_DATABASE` | `:memory:`              | Optional path for a persistent, disposable SQLite index  |
-| `WIKI_TRACES`   | Disabled                | Separate directory of imported immutable trace snapshots |
-| `WIKI_WRITE`    | Disabled                | Set `1` to enable HTTP/browser edits                     |
-| `WIKI_PUSH`     | Disabled                | Set `1` to push writer commits to content `origin main`  |
+| Setting             | Default                 | Purpose                                                                   |
+| ------------------- | ----------------------- | ------------------------------------------------------------------------- |
+| `WIKI_REPO`         | Required                | Content repository, independent of this engine                            |
+| `PORT`              | `4317`                  | Loopback listener port                                                    |
+| `WIKI_ORIGIN`       | `http://127.0.0.1:PORT` | Exact allowed origin and Host                                             |
+| `WIKI_DATABASE`     | `:memory:`              | Optional path for a persistent, disposable SQLite index                   |
+| `WIKI_EVIDENCE_URL` | Disabled                | Read-only existing archive service; mutually exclusive with `WIKI_TRACES` |
+| `WIKI_TRACES`       | Disabled                | Separate directory of imported immutable trace snapshots                  |
+| `WIKI_WRITE`        | Disabled                | Set `1` to enable HTTP/browser edits                                      |
+| `WIKI_PUSH`         | Disabled                | Set `1` to push writer commits to content `origin main`                   |
 
 The CLI writer uses `WIKI_REPO` and `WIKI_PUSH`; `WIKI_WRITE` controls HTTP access
 only. Example mode always uses its own local content and trace archive, ignores
@@ -162,3 +163,6 @@ remove that directory only if you intend to discard your example edits and impor
 example snapshots. Removing the engine checkout does not remove a separately
 configured content repository or trace archive. There are no installed services,
 cloud resources, model calls, or paid accounts required by this engine.
+
+Existing archives can supply conversation search, preserved event links, and captured
+files through the [external evidence contract](docs/external-evidence.md).

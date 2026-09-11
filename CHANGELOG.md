@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-09-10
+
+Compatible additions and fixes; existing imported archives continue to work.
+External archive integration is opt-in and does not migrate original evidence.
+
+- Add independent, concurrent article and trace search with scope and metadata filters.
+- Add a read-only external evidence provider, native conversation pages, preserved
+  event aliases and category navigation, captured images and file previews/downloads.
+- Preserve structured evidence records and article source anchors; render raw HTML
+  as literal text and avoid automatic external image requests.
+- Add desktop/mobile coverage for delayed trace results, event navigation and files.
 
 - Recover legacy recreation receipts from their recorded Git tree before numeric fallback.
 - Enforce the existing archive size limit throughout verified range spooling.

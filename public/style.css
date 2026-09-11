@@ -877,3 +877,110 @@ footer select {
     height: 55vh;
   }
 }
+
+/* Captured media and the archive-backed conversation reader. */
+.embedded-image {
+  display: inline-flex;
+  flex-direction: column;
+  max-width: 100%;
+  gap: 0.3rem;
+}
+.embedded-image img,
+.file-card img {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  height: auto;
+}
+.image-download,
+.source-location {
+  font-size: 0.85rem;
+}
+.unavailable-image {
+  color: var(--color-muted);
+  font-style: italic;
+}
+.attachments {
+  display: grid;
+  gap: 1rem;
+  margin-block: 1.2rem;
+}
+.file-card {
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.file-card h3 {
+  margin-block: 0.7rem 0.3rem;
+}
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.file-preview {
+  margin-top: 1rem;
+}
+.file-preview pre,
+.evidence-reader pre {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.evidence-reader {
+  max-width: 900px;
+  margin-inline: auto;
+}
+.evidence-reader h1 {
+  overflow-wrap: anywhere;
+}
+.trace-categories {
+  flex-wrap: wrap;
+}
+.evidence-message {
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+  scroll-margin-top: 1rem;
+}
+.evidence-message > header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin-bottom: 0.8rem;
+}
+.evidence-message > header > a {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+.evidence-message:target {
+  outline: 2px solid var(--color-link);
+  outline-offset: 0.4rem;
+  border-radius: 0.2rem;
+}
+.message-alias {
+  scroll-margin-top: 1rem;
+}
+.source-location {
+  margin-top: 1rem;
+  color: var(--color-muted);
+}
+.source-location code {
+  overflow-wrap: anywhere;
+}
+.article-evidence section {
+  scroll-margin-top: 1rem;
+  padding-block: 0.5rem;
+}
+@media (max-width: 760px) {
+  .evidence-message {
+    padding-block: 1rem;
+  }
+  .trace-categories a {
+    padding: 0.5rem;
+  }
+}

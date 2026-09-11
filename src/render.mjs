@@ -1,3 +1,8 @@
+import {
+  markdownEnhancements,
+  capturedMedia,
+} from "./markdown-enhancements.mjs";
+import { attachmentsHTML } from "./attachments.mjs";
 import remarkRehype from "remark-rehype";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
@@ -85,10 +90,12 @@ function tableRegions() {
   };
 }
 const parser = markdownParser()
+  .use(markdownEnhancements)
   .use(headingIds)
   .use(wikiLinks)
   .use(remarkRehype)
   .use(rehypeSanitize, { ...defaultSchema, clobberPrefix: "" })
+  .use(capturedMedia)
   .use(tableRegions)
   .use(rehypeStringify);
 export const renderMarkdown = async (body) =>
@@ -138,16 +145,29 @@ export function shell(title, body, { active = "", className = "" } = {}) {
 }
 export function sources(page) {
   const found = new Map();
-  const add = (url, title, quote) => {
+  const add = (url, title, quote, identity = url) => {
     if (!safeUrl(url) || url.startsWith("#") || url.startsWith("/wiki/"))
       return;
-    if (!found.has(url))
-      found.set(url, {
+    if (!found.has(identity))
+      found.set(identity, {
         url,
         title: title || url,
         quote: typeof quote === "string" ? quote : "",
       });
   };
+  for (const [i, s] of (Array.isArray(page.evidence) ? page.evidence : [])
+    .filter(Boolean)
+    .entries())
+    add(
+      s.url ||
+        (s.conversation && s.event
+          ? `/conversations/${s.conversation}/#${s.event}`
+          : ""),
+      s.title ||
+        `${s.attribution || "Source"} · ${s.session_start || "Recorded passage"}`,
+      s.quote,
+      "evidence-" + i,
+    );
   for (const s of page.sources || [])
     add(s.url, typeof s.title === "string" ? s.title : s.url, s.quote);
   const tree = markdownParser.parse(page.body),
@@ -201,7 +221,22 @@ export async function article(
     .filter(Boolean);
   return shell(
     p.title,
-    `<div class="layout article-layout"><div>${articleHeader(p, "Article", { write, historical: !!revision })}<div class="revision-meta"><p class="meta">Revision ${p.number} · Updated ${date(p.created_at)}</p>${write && !revision ? `<a class="edit-article" href="/wiki/${p.id}/edit/">Edit article</a>` : ""}</div>${revision ? `<nav class="actions" aria-label="Revision navigation">${p.number > 1 ? link(`/wiki/${id}/revision/${p.number - 1}/`, "Previous revision") : ""}${p.number < p.revisionCount ? link(`/wiki/${id}/revision/${p.number + 1}/`, "Next revision") : ""}${link(queryLink(`/wiki/${id}/compare/`, { from: p.number, to: p.revisionCount }), "Compare with current")}</nav>` : `<div class="notice">Latest change: ${escape(p.summary)}${p.number > 1 ? ` · ${link(queryLink(`/wiki/${id}/compare/`, { from: p.number - 1, to: p.number }), "View changes →")}` : ""}</div>`}${toc.length ? `<details class="mobile-toc"><summary>On this page</summary>${tocLinks}</details>` : ""}<article>${await renderMarkdown(p.body)}</article></div><aside class="sidebar">${toc.length ? `<section class="desktop-toc"><h2>On this page</h2>${tocLinks}</section>` : ""}<div class="article-side-links">${related.length ? `<section><h2>Related articles</h2>${list(related.map((p) => link(p.url, p.title)))}</section>` : ""}<section><h2>Linked from</h2>${index.backlinks(id).length ? list(index.backlinks(id).map((p) => link(`/wiki/${p.id}/`, p.title))) : '<p class="muted">No incoming article links yet.</p>'}</section></div></aside></div>`,
+    `<div class="layout article-layout"><div>${articleHeader(p, "Article", { write, historical: !!revision })}<div class="revision-meta"><p class="meta">Revision ${p.number} · Updated ${date(p.created_at)}</p>${write && !revision ? `<a class="edit-article" href="/wiki/${p.id}/edit/">Edit article</a>` : ""}</div>${revision ? `<nav class="actions" aria-label="Revision navigation">${p.number > 1 ? link(`/wiki/${id}/revision/${p.number - 1}/`, "Previous revision") : ""}${p.number < p.revisionCount ? link(`/wiki/${id}/revision/${p.number + 1}/`, "Next revision") : ""}${link(queryLink(`/wiki/${id}/compare/`, { from: p.number, to: p.revisionCount }), "Compare with current")}</nav>` : `<div class="notice">Latest change: ${escape(p.summary)}${p.number > 1 ? ` · ${link(queryLink(`/wiki/${id}/compare/`, { from: p.number - 1, to: p.number }), "View changes →")}` : ""}</div>`}${toc.length ? `<details class="mobile-toc"><summary>On this page</summary>${tocLinks}</details>` : ""}<article>${await renderMarkdown(p.body)}${await attachmentsHTML(p.attachments || [])}${
+      (Array.isArray(p.evidence) ? p.evidence : []).length
+        ? `<section class="article-evidence"><h2>Source passages</h2>${(Array.isArray(
+            p.evidence,
+          )
+            ? p.evidence
+            : []
+          )
+            .filter(Boolean)
+            .map(
+              (s, i) =>
+                `<section id="source-${i + 1}"><blockquote>${escape(s.quote || "")}</blockquote><p>${link(s.url || `/conversations/${s.conversation}/#${s.event}`, `${s.attribution || "Source"} · ${s.session_start || "Open recorded passage"}`)}</p></section>`,
+            )
+            .join("")}</section>`
+        : ""
+    }</article></div><aside class="sidebar">${toc.length ? `<section class="desktop-toc"><h2>On this page</h2>${tocLinks}</section>` : ""}<div class="article-side-links">${related.length ? `<section><h2>Related articles</h2>${list(related.map((p) => link(p.url, p.title)))}</section>` : ""}<section><h2>Linked from</h2>${index.backlinks(id).length ? list(index.backlinks(id).map((p) => link(`/wiki/${p.id}/`, p.title))) : '<p class="muted">No incoming article links yet.</p>'}</section></div></aside></div>`,
     { active: "Topics" },
   );
 }

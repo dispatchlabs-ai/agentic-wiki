@@ -195,3 +195,6 @@ provenance, use `GET /api/traces/provenance.json?key=LOGICAL_KEY&limit=20&offset
 or WebMCP `wiki.traceProvenance`. Pages contain `provenance`, exact `total` and
 `snapshot_count`, `nextOffset`, and a `next` URL. Limits are 1–100; offsets are
 nonnegative safe integers. Unavailable or incompatible indexes return 503.
+
+See [existing archive integration](external-evidence.md) for the optional provider,
+its API differences, native conversation URLs, files, and concurrent search.

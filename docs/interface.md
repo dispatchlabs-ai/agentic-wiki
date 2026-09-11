@@ -60,3 +60,6 @@ The synthetic example articles cite the bundled immutable traces at their origin
 answer lines. To refresh an existing demo, review and commit the example Markdown
 into its content repository explicitly; startup never replaces existing articles
 or rewrites their history. Maintenance commits remain visible in historical views.
+
+See [existing archive integration](external-evidence.md) for the optional provider,
+its API differences, native conversation URLs, files, and concurrent search.
