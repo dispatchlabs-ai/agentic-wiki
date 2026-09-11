@@ -34,6 +34,9 @@ article-only search or original trace/catalog reads. See [trace health and recov
 
 ## Regular MCP
 
+For a complete local client setup and a first search/edit workflow, follow
+[Connect Codex CLI](getting-started.md#connect-codex-cli).
+
 Connect a Streamable HTTP client to `${WIKI_ORIGIN}/mcp`. The existing wiki
 process serves this stateless endpoint; no separate service or browser is needed.
 The official MCP SDK handles initialization, discovery, schema validation and

@@ -18,8 +18,9 @@ responsibility for understanding and verifying the submitted code. Avoid automat
 issue or pull-request spam. Treat people respectfully and keep discussions focused
 on the work. Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-Start with [contributor priorities and contracts](docs/contributor-guide.md) for
-small scoped improvements, format fixtures, and acceptance criteria. Browser work
+Start with the [roadmap and approachable issues](docs/roadmap.md) to choose a
+bounded task. The [contributor map](docs/contributor-guide.md) explains the code,
+format fixtures, and correctness contracts. Browser work
 also needs `npx playwright install chromium` and `npm run test:browser`.
 
 User-visible changes need a changelog entry and a versioned release before being

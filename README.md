@@ -1,25 +1,35 @@
 # Agentic Wiki
 
-Agentic Wiki is an MIT-licensed open-source project created by Chris Reynolds,
-cofounder of **Dispatch Labs AI**.
+A Git-backed wiki that people and AI agents can read and update, with links back
+to the conversations behind its knowledge.
 
-**Status: 0.2.2 — initial development source release.**
-See the [changelog](CHANGELOG.md) and [versioning and release policy](docs/releases.md).
-The public API is still evolving; this is not a production-support commitment.
+Keep project knowledge in Markdown you own. Search it from a browser or an MCP
+client, follow a claim to its original evidence, and review updates in Git history.
+The wiki engine needs no model, embedding service, database server, or frontend
+build. An agent client uses its own model and account.
 
-A small Git-backed Markdown wiki for people and agents. Node serves sanitized
-articles on demand; SQLite FTS5 indexes changed blobs and wiki links. Article
-commits need no site build. No model, embedding service, graph database, or frontend
-framework is required.
+![Atlas Labs example article with linked evidence, revision history, and backlinks](docs/assets/atlas-labs-desktop.png)
 
-Codex and pi JSONL traces also render on demand from immutable source snapshots,
-with a bounded worker pool and memory cache. See [trace storage and rendering](docs/traces.md).
+[Try the walkthrough](docs/getting-started.md) ·
+[Connect an agent](docs/getting-started.md#connect-codex-cli) ·
+[Find a contribution](docs/roadmap.md) ·
+[API reference](docs/api.md)
 
-The [responsive interface](docs/interface.md) provides mobile and desktop layouts,
-light and dark appearance, revision comparisons, source views, and draft preview.
+## Who it is for
 
-The engine and content are separate repositories. Each instance reads one content
-repository; it never serves that repository's files directly.
+For individuals and small trusted teams who want a shared knowledge collection
+that humans can browse and agents can maintain. Articles live in a separate Git
+repository; optional Codex and pi conversation snapshots preserve the evidence
+behind them. Article commits appear without rebuilding the site.
+
+Each instance has one access boundary: everyone with access can read all its
+articles, history, and traces. Shared hosting requires your own HTTPS proxy and
+access control. See [security](SECURITY.md) before connecting private content.
+
+**Latest release: 0.2.2 — initial development source release.** Public contracts
+are evolving. The quickstart below uses `main`, which may include unreleased
+changes; see the [changelog](CHANGELOG.md) and [release policy](docs/releases.md).
+Created by Chris Reynolds, cofounder of **Dispatch Labs AI**, and released under MIT.
 
 ## Run the example
 
@@ -27,12 +37,17 @@ Requires **Linux or macOS, Node 24.19+, and Git**. Node's built-in SQLite
 is used; no database server is needed.
 
 ```sh
+git clone https://github.com/dispatchlabs-ai/agentic-wiki.git
+cd agentic-wiki
 npm ci
-npm test
 npm run example
 ```
 
-Open `http://127.0.0.1:4317`. The three fictional articles are copied into a new
+Open `http://127.0.0.1:4317`, choose **Atlas Labs**, and follow **recorded decision**
+to its original conversation. The [walkthrough](docs/getting-started.md) continues
+through an agent search, a saved edit, and a personal content repository.
+
+The three fictional articles are copied into a new
 Git repository at `.runtime/example` on the first run. Browser editing is enabled
 there; changes survive restarting the example. The shipped `examples/wiki/`
 corpus is unchanged. Set `PORT` to choose another port. Stop with Ctrl-C.
@@ -62,7 +77,7 @@ WIKI_REPO=/absolute/path/to/content npm start
 
 The CLI writer uses `WIKI_REPO` and `WIKI_PUSH`; `WIKI_WRITE` controls HTTP access
 only. Example mode always uses its own local content and trace archive, ignores
-`WIKI_REPO`, `WIKI_TRACES`, and `WIKI_PUSH`, and does not push.
+`WIKI_REPO`, `WIKI_TRACES`, `WIKI_EVIDENCE_URL`, and `WIKI_PUSH`, and does not push.
 
 The process binds only to `127.0.0.1`. Shared hosting needs an HTTPS reverse proxy
 and appropriate access control; configure `WIKI_ORIGIN` to its external origin
@@ -116,6 +131,12 @@ Non-browser agents can also use the underlying HTTP APIs directly.
 See [API and editing](docs/api.md) for request shapes, retry semantics, and errors.
 
 ## Design and limits
+
+Node serves sanitized articles on demand. SQLite FTS5 indexes changed blobs and
+wiki links. The [responsive interface](docs/interface.md) supports light and dark
+appearance, revision comparisons, source views, and draft preview. Optional
+immutable JSONL snapshots use a bounded worker pool and cache; see
+[trace storage and rendering](docs/traces.md).
 
 `src/git-wiki.mjs` validates committed trees and reads history from Git objects.
 `src/wiki-search.mjs` transactionally updates section passages and backlinks only
