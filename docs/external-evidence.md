@@ -110,3 +110,14 @@ content; original source records and captured files remain available separately.
 
 Example: `{id, event: "<event-id>", textOffset: 0, textLimit: 4000}` followed by
 the same request with `textOffset` set to the returned `nextTextOffset`.
+
+## Conversation attachment display
+
+The HTML reader projects complete Codex user file envelopes into prompt text and
+attachment cards when every listed filename matches unique attachment metadata.
+Only empty image markers with exact paths from that envelope are omitted from the
+displayed prompt. Code examples, unknown paths, ambiguous metadata, and incomplete
+envelopes remain literal. Missing captured files still have an unavailable card.
+The complete original message is expandable under Source location whenever this
+projection changes its display. API text, search, source citations, and immutable
+records remain unchanged. Message headings use conversation-sized typography.
