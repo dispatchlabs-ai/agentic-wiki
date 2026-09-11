@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reuse compiled MCP tool schemas across requests to prevent SDK cache growth.
+- Reject unsupported MCP methods before reading their bodies, preserving the
+  request-size boundary and promptly rejecting unfinished uploads.
+
 - Isolate draft previews in a bounded worker pool with queue-inclusive deadlines,
   worker heap/output limits, and cancellation on disconnect. Article serving stays
   responsive during expensive previews, including on read-only instances.

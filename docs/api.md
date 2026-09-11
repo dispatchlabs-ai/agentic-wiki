@@ -71,7 +71,8 @@ checks, atomic updates, evidence verification and retry receipts.
 
 Requests must target the configured Host. A supplied Origin must exactly match
 `WIKI_ORIGIN`; native clients may omit Origin. Cross-site browser requests are
-rejected and no CORS access is granted. POST bodies are limited to 512,000 bytes.
+rejected and no CORS access is granted. POST bodies are limited to 512,000 bytes. Unsupported methods (including
+PUT, PATCH and DELETE) receive 405 before their bodies are read.
 Responses carry JSON results (legacy clients may receive SSE framing); the
 endpoint does not provide unsolicited notifications or persistent sessions. It inherits the wiki's access boundary and has no built-in
 user authentication. Keep existing proxy authentication/access rules on `/mcp`.

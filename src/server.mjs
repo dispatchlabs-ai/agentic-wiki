@@ -130,6 +130,11 @@ export function createWiki({
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("X-Wiki-Commit", wiki.head);
         res.setHeader("X-Content-Type-Options", "nosniff");
+        // Reject before the SDK adapter can buffer unsupported-method bodies.
+        if (req.method !== "POST" && req.method !== "GET") {
+          res.setHeader("Allow", "GET, POST");
+          return send(405, { error: "Method not allowed" });
+        }
         let body;
         if (req.method === "POST") {
           const chunks = [];

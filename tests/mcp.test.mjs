@@ -1,3 +1,4 @@
+import { McpServer } from "@modelcontextprotocol/server";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -344,3 +345,92 @@ for (const mode of ["legacy", { pin: "2026-07-28" }]) {
     },
   );
 }
+
+for (const mode of ["legacy", { pin: "2026-07-28" }]) {
+  test(`MCP schema compilation is reused across requests (${JSON.stringify(mode)})`, async (t) => {
+    const schemas = new Map();
+    let registrations = 0;
+    const register = McpServer.prototype.registerTool;
+    t.mock.method(
+      McpServer.prototype,
+      "registerTool",
+      function (name, config, callback) {
+        registrations++;
+        if (!schemas.has(name)) schemas.set(name, config.inputSchema);
+        else
+          assert.equal(
+            config.inputSchema,
+            schemas.get(name),
+            `${name} must reuse its compiled schema`,
+          );
+        return register.call(this, name, config, callback);
+      },
+    );
+    const { client, call } = await setup(t, false, {}, { mode });
+    for (let i = 0; i < 50; i++) {
+      assert.equal((await client.listTools()).tools.length, schemas.size);
+    }
+    assert.ok(registrations >= 50 * schemas.size);
+    assert.match(
+      (await call("wiki.read", { id: "guide" })).value.body,
+      /Start here/,
+    );
+    assert.equal(
+      (
+        await client.callTool({
+          name: "wiki.read",
+          arguments: { id: "../invalid" },
+        })
+      ).isError,
+      true,
+    );
+  });
+}
+
+test(
+  "unsupported MCP methods reject unfinished uploads before reading their bodies",
+  { timeout: 10000 },
+  async (t) => {
+    const { url } = await setup(t);
+    for (const route of [url, url + "/"]) {
+      for (const method of ["PUT", "PATCH", "DELETE", "OPTIONS"]) {
+        await new Promise((resolve, reject) => {
+          const req = http.request(
+            route,
+            {
+              method,
+              headers: {
+                Host: "wiki.test",
+                "Content-Length": "2000000",
+                "Content-Type": "application/json",
+              },
+            },
+            (res) => {
+              try {
+                assert.equal(res.statusCode, 405);
+                assert.equal(res.headers.allow, "GET, POST");
+                clearTimeout(timer);
+                req.destroy();
+                resolve();
+              } catch (error) {
+                reject(error);
+              }
+            },
+          );
+          const timer = setTimeout(() => {
+            req.destroy();
+            reject(
+              new Error(`${method} waited for an unfinished oversized upload`),
+            );
+          }, 1000);
+          req.on("error", (error) => {
+            clearTimeout(timer);
+            reject(error);
+          });
+          // Deliberately leave the remaining body unsent: buffering must not occur.
+          req.write("{");
+        });
+      }
+    }
+  },
+);
