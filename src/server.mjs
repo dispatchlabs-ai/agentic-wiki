@@ -728,7 +728,7 @@ export function createWiki({
   const mcp = createWikiMcp({
     write,
     externalEvidence: !!evidence,
-    request: (route, draft) => mcpApi.request(route, draft),
+    request: (route, draft, signal) => mcpApi.request(route, draft, signal),
   });
   server.on("close", () => {
     mcpApi.close();

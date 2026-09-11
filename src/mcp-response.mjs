@@ -21,7 +21,15 @@ export class McpApiClient {
     this.closed = false;
   }
 
-  async request(route, draft) {
+  /** @param {string} route @param {any} [draft] @param {AbortSignal} [signal] */
+  async request(route, draft, signal) {
+    const cancelled = () =>
+      new WikiError(
+        "MCP_CANCELLED",
+        "MCP request cancelled; retry saves with identical input and operation_id.",
+        499,
+      );
+    if (signal?.aborted) throw cancelled();
     if (!route.startsWith("/api/"))
       throw new Error("Invalid internal API route");
     if (this.closed)
@@ -53,6 +61,7 @@ export class McpApiClient {
         if (finished) return;
         finished = true;
         clearTimeout(timer);
+        signal?.removeEventListener("abort", abort);
         this.pending.delete(cancel);
         upstream.destroy();
         if (error) reject(error);
@@ -60,6 +69,7 @@ export class McpApiClient {
       };
       const cancel = () =>
         finish(new WikiError("MCP_CLOSED", "MCP bridge is closed.", 503));
+      const abort = () => finish(cancelled());
       this.pending.add(cancel);
       const timer = setTimeout(
         () =>
@@ -123,7 +133,9 @@ export class McpApiClient {
           }
         });
       });
-      upstream.end(draft ? JSON.stringify(draft) : undefined);
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted) abort();
+      else upstream.end(draft ? JSON.stringify(draft) : undefined);
     });
   }
 

@@ -32,12 +32,14 @@ async function setup(t, write = false, options = {}, clientOptions = {}) {
     { name: "wiki-test", version: "1.0.0" },
     clientOptions,
   );
+  const requests = [];
   const fetchWiki = async (input, options = {}) =>
     new Promise((resolve, reject) => {
       const req = http.request(
         String(input),
         {
           method: options.method || "GET",
+          signal: options.signal,
           headers: {
             ...Object.fromEntries(new Headers(options.headers)),
             Host: "wiki.test",
@@ -58,6 +60,7 @@ async function setup(t, write = false, options = {}, clientOptions = {}) {
           );
         },
       );
+      requests.push({ req, body: options.body });
       req.on("error", reject);
       req.end(options.body);
     });
@@ -69,7 +72,7 @@ async function setup(t, write = false, options = {}, clientOptions = {}) {
     const response = await client.callTool({ name, arguments: args });
     return { response, value: JSON.parse(response.content[0].text) };
   };
-  return { client, call, url, origin, fetchWiki };
+  return { client, call, url, origin, fetchWiki, server, requests };
 }
 
 test("regular MCP shares WebMCP schemas, reads, preview and read-only discovery", async (t) => {
@@ -282,3 +285,62 @@ test("large MCP trace reads link to complete originals while explicit small rang
   assert.equal(missing.response.isError, true);
   assert.equal(missing.value.status, 404);
 });
+
+for (const mode of ["legacy", { pin: "2026-07-28" }]) {
+  test(
+    `disconnected MCP previews release bridge and renderer capacity (${JSON.stringify(mode)})`,
+    { timeout: 15000 },
+    async (t) => {
+      const { client, call, server, requests } = await setup(
+        t,
+        false,
+        {},
+        { mode },
+      );
+      let started = 0,
+        disconnected = 0;
+      server.on("request", (req, res) => {
+        if (req.url !== "/api/articles/preview") return;
+        started++;
+        res.on("close", () => disconnected++);
+      });
+      const controllers = Array.from(
+        { length: 4 },
+        () => new AbortController(),
+      );
+      t.after(() => controllers.forEach((controller) => controller.abort()));
+      const body = "|a|b|c|d|\n|-|-|-|-|\n" + "|x|y|z|w|\n".repeat(5000);
+      const pending = controllers.map((controller) =>
+        assert.rejects(
+          client.callTool(
+            { name: "wiki.preview", arguments: { body } },
+            { signal: controller.signal },
+          ),
+        ),
+      );
+      const waitFor = async (predicate) => {
+        const deadline = Date.now() + 2000;
+        while (!predicate()) {
+          assert.ok(
+            Date.now() < deadline,
+            "MCP requests must start/cancel before the preview deadline",
+          );
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      };
+      await waitFor(() => started === 4);
+      for (const item of requests) {
+        if (item.body && JSON.parse(item.body).params?.name === "wiki.preview")
+          item.req.destroy(new Error("Synthetic caller disconnected"));
+      }
+      await Promise.all(pending);
+      await waitFor(() => disconnected === 4);
+      const read = await call("wiki.read", { id: "guide" });
+      assert.ok(!read.response.isError, JSON.stringify(read.value));
+      assert.match(read.value.body, /Start here/);
+      const preview = await call("wiki.preview", { body: "**Recovered**" });
+      assert.ok(!preview.response.isError, JSON.stringify(preview.value));
+      assert.match(preview.value.html, /<strong>Recovered<\/strong>/);
+    },
+  );
+}

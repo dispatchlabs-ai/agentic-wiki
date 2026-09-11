@@ -115,3 +115,44 @@ test("MCP bridge bounds concurrent requests, deadlines and shutdown", async (t) 
     status: 503,
   });
 });
+
+test(
+  "cancellation releases bridge capacity without cancelling other calls",
+  { timeout: 5000 },
+  async (t) => {
+    const responses = new Map();
+    const client = await bridge(
+      t,
+      (req, res) => {
+        responses.set(req.url, res);
+      },
+      { maxConcurrent: 2 },
+    );
+    const first = new AbortController();
+    const cancelled = assert.rejects(
+      client.request("/api/first", undefined, first.signal),
+      { code: "MCP_CANCELLED" },
+    );
+    const survivor = client.request("/api/survivor");
+    while (responses.size < 2)
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    const closed = once(responses.get("/api/first"), "close");
+    first.abort();
+    await cancelled;
+    await closed;
+    assert.equal(client.pending.size, 1);
+    const replacement = client.request("/api/replacement");
+    while (!responses.has("/api/replacement"))
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    responses.get("/api/replacement").end('{"replacement":true}');
+    responses.get("/api/survivor").end('{"survivor":true}');
+    assert.deepEqual(await replacement, { replacement: true });
+    assert.deepEqual(await survivor, { survivor: true });
+    await assert.rejects(
+      client.request("/api/not-started", undefined, first.signal),
+      { code: "MCP_CANCELLED" },
+    );
+    assert.equal(responses.size, 3);
+    assert.equal(client.pending.size, 0);
+  },
+);
