@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.2 — 2026-09-11
+
+Compatible WebMCP fixes and additions; no content migration or automatic writer activation.
+
+- Translate external trace page numbers to offsets, validate pagination conflicts,
+  and omit unsupported imported-session filters from external tool discovery.
+- Preserve structured HTTP errors through native WebMCP, including writer errors
+  accompanied by runtime warnings. Success receipts retain their existing shape.
+- Add read-only Markdown preview and captured-file inspection tools, including
+  preview status and original/download URLs.
+- Accept verified structured quotations in article edits. Exact dialogue/tool
+  quotes resolve original event aliases and retain provenance; omitted evidence
+  is preserved and an empty array explicitly clears it. Receipt retries work even
+  when the evidence service is unavailable.
+- Exercise real Chromium WebMCP registration and execution in synthetic browser
+  tests, including pagination, file ranges, atomic quote rejection and save retries.
+
 ## 0.1.1 — 2026-09-10
 
 Compatible additions and fixes; existing imported archives continue to work.

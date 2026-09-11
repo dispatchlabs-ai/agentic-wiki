@@ -48,6 +48,14 @@ Scores from separate indexes are not merged into a single ranking. Attachment
 text is not searched unless the operator's search service explicitly indexes it.
 
 `wiki.traces`, `wiki.trace`, and `wiki.traceSearch` use the provider when configured.
+`wiki.trace` supports `page` (one-based, default page size 100), `limit` (1–100),
+`offset` (zero-based), `kind` and event lookup. If page and offset are both supplied,
+they must identify the same starting point. An event lookup selects its own page.
+The engine translates page numbers before calling the provider. External catalogs
+use machine/harness filters and reject the imported-only `session_id` parameter.
+`wiki.file` exposes safe file inspection and original/download URLs; `wiki.preview`
+renders draft Markdown without writing. See [the API contract](api.md#webmcp-quotation-and-failure-contracts)
+for verified quotations and structured WebMCP errors.
 Provider mode omits imported-archive session, raw-line and logical-provenance tools.
 Structured article evidence remains distinct, including multiple quotes from one
 URL; source anchors and task state metadata are preserved. Existing conversation

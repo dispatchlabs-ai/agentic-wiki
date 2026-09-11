@@ -1,4 +1,5 @@
 // @ts-check
+import { validateEvidence, verifyDraftEvidence } from "./evidence-quotes.mjs";
 import { WikiError } from "./errors.mjs";
 import { editSchema } from "../public/edit-contract.js";
 import fs from "node:fs";
@@ -19,7 +20,7 @@ import { references } from "./wiki.mjs";
 
 /** @param {string} repo @param {import("../public/edit-contract.js").EditDraft} draft
  * @returns {import("../public/edit-contract.js").SaveReceipt} */
-export function saveGitEdits(repo, draft) {
+export function saveGitEdits(repo, draft, verified = new Map()) {
   if (
     !draft ||
     !validId(draft.operation_id) ||
@@ -125,6 +126,18 @@ export function saveGitEdits(repo, draft) {
       )
         throw new WikiError("INVALID_EDIT", `Invalid ${field}`);
     }
+    if (u.evidence !== undefined) {
+      validateEvidence(u.evidence);
+      if (
+        u.evidence.length &&
+        verified.get(u.id)?.input !== JSON.stringify(u.evidence)
+      )
+        throw new WikiError(
+          "EVIDENCE_UNAVAILABLE",
+          "Evidence must be verified before saving",
+          503,
+        );
+    }
     const metadata = current
       ? { ...wiki.pages.get(u.id) }
       : { kind: "topic", sources: [] };
@@ -147,6 +160,8 @@ export function saveGitEdits(repo, draft) {
       related: u.related ?? current?.related ?? [],
       questions: u.questions ?? current?.questions ?? [],
     });
+    if (u.evidence !== undefined)
+      metadata.evidence = u.evidence.length ? verified.get(u.id).records : [];
     const name = current?.filename || `wiki/${u.id}.md`;
     files[name] = markdown(metadata, u.body);
     proposed.set(u.id, parsePage(files[name], name, null));
@@ -194,7 +209,12 @@ if (
   try {
     await withWriterLock(repo, async () => {
       const draft = JSON.parse(fs.readFileSync(0, "utf8"));
-      const result = saveGitEdits(repo, draft);
+      const verified = await verifyDraftEvidence(
+        repo,
+        draft,
+        process.env.WIKI_EVIDENCE_URL,
+      );
+      const result = saveGitEdits(repo, draft, verified);
       // Retry also retries a previously failed push. A failed remote never makes
       // the local durable commit disappear or creates a duplicate revision.
       try {

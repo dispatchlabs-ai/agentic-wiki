@@ -97,8 +97,49 @@ export class EvidenceClient {
       15000,
     );
   }
+  /** @param {string} id @param {Record<string, any>} [params] */
   read(id, params = {}) {
-    return this.json("traces/" + encodeURIComponent(id), params);
+    const { page, ...query } = params;
+    const limit = Number(query.limit ?? 100);
+    const offset = Number(query.offset ?? 0);
+    if (
+      !/^chat-[a-f0-9]{24}$/.test(id) ||
+      ![
+        "dialogue",
+        "tool",
+        "thinking",
+        "reasoning",
+        "context",
+        "analysis",
+      ].includes(query.kind || "dialogue") ||
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > 100 ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      offset > 1000000 ||
+      String(query.event || "").length > 300 ||
+      Object.keys(query).some(
+        (k) => !["kind", "offset", "limit", "event"].includes(k),
+      )
+    )
+      throw new WikiError("INVALID_TRACE_PAGE", "Invalid evidence page");
+    if (page !== undefined) {
+      const number = Number(page),
+        position = (number - 1) * limit;
+      if (
+        !Number.isSafeInteger(number) ||
+        number < 1 ||
+        position > 1000000 ||
+        (query.offset !== undefined && offset !== position)
+      )
+        throw new WikiError(
+          "INVALID_TRACE_PAGE",
+          "Page and offset must identify the same evidence page",
+        );
+      query.offset = position;
+    }
+    return this.json("traces/" + encodeURIComponent(id), query);
   }
   attachment(asset) {
     return this.json("attachments/" + encodeURIComponent(asset));

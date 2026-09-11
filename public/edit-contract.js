@@ -10,6 +10,7 @@
  * @property {string} summary
  * @property {string[]} [related]
  * @property {string[]} [questions]
+ * @property {{conversation:string,event:string,quote:string}[]} [evidence]
  * @typedef {{operation_id: string, updates: ArticleUpdate[]}} EditDraft
  * @typedef {{id: string, number: number, url: string, revision_id: string}} ArticleReceipt
  * @typedef {{id:string, number:number, url:string, revision_id?:string}} LegacyArticleReceipt
@@ -41,6 +42,23 @@ export const editSchema = {
           summary: { type: "string", maxLength: 1000 },
           related: { type: "array", items: id },
           questions: { type: "array", items: { type: "string" } },
+          evidence: {
+            type: "array",
+            maxItems: 20,
+            items: {
+              type: "object",
+              properties: {
+                conversation: {
+                  type: "string",
+                  pattern: "^chat-[a-f0-9]{24}$",
+                },
+                event: { type: "string", minLength: 1, maxLength: 300 },
+                quote: { type: "string", minLength: 1, maxLength: 2500 },
+              },
+              required: ["conversation", "event", "quote"],
+              additionalProperties: false,
+            },
+          },
         },
         required: [
           "id",

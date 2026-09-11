@@ -35,7 +35,7 @@ article-only search or original trace/catalog reads. See [trace health and recov
 ## Preview a draft
 
 `POST /api/articles/preview` accepts `{ "body": "Markdown" }` and returns
-`{ "html": "sanitized HTML" }`. It requires enabled writing, the configured Origin
+`{ "html": "sanitized HTML" }`. It is read-only and requires the configured Origin
 and Host, and JSON content type. The request is limited to 512,000 bytes and the
 Markdown body to 100,000 characters. Preview changes no files, revisions, or
 receipts.
@@ -66,7 +66,9 @@ including mutually linked new pages. Supply all required strings on every update
 `operation_id` uses the same lowercase hyphenated syntax as article IDs; a UUID
 works. Maximum string lengths: title 200, description 600, topic 100, body 100,000,
 summary 1,000. Optional `related` and `questions` arrays replace those fields;
-omission preserves them. Other existing frontmatter is preserved. New pages get
+omission preserves them. Optional `evidence` replaces structured source records after verification (see below);
+omission preserves them and `[]` explicitly clears them. Other existing frontmatter
+is preserved. New pages get
 `kind: topic`; use file edits for arbitrary initial custom metadata. Unknown update
 fields are not applied. The HTTP body is limited to 512,000 bytes.
 
@@ -198,3 +200,34 @@ nonnegative safe integers. Unavailable or incompatible indexes return 503.
 
 See [existing archive integration](external-evidence.md) for the optional provider,
 its API differences, native conversation URLs, files, and concurrent search.
+
+## WebMCP quotation and failure contracts
+
+With `WIKI_EVIDENCE_URL`, `wiki.save` accepts up to 20 `evidence` entries per
+article: `{conversation, event, quote}`. Conversations are existing `chat-` IDs;
+quotes contain 1–2500 characters and must be exact substrings of recorded dialogue
+or tool text. The writer resolves aliases, records canonical event/conversation
+IDs, attribution, timestamps and original snapshot/line provenance. Caller-supplied
+provenance fields are rejected. The entire batch is verified before committing.
+Nonempty structured evidence without the provider fails explicitly; ordinary
+Markdown citations and preservation/clearing of existing evidence still work.
+The CLI uses the same configured provider and verification path under the writer
+lock. Already-committed operation retries do not depend on source availability.
+
+Errors from registered WebMCP callbacks return
+`{isError:true, state:"rejected", status, code, error}` instead of throwing away
+details at the browser boundary. HTTP status codes remain HTTP statuses. Save
+successes retain their existing receipt shape; inspect `remote` and `publication`
+separately. `REVISION_CONFLICT` requires a fresh read and reconciliation;
+`OPERATION_CONFLICT` rejects different input under an existing operation ID.
+`INVALID_EVIDENCE` or `EVIDENCE_MISMATCH` rejects a bad citation without a commit;
+`EVIDENCE_UNAVAILABLE` reports a missing/offline provider. Network failures have
+status 0 and code `NETWORK_ERROR`; retry an ambiguous save with identical input
+and the same operation ID. Native schema-validation errors occur before callbacks.
+
+`wiki.preview({body})` renders sanitized Markdown without saving and is available
+on read-only sites. `wiki.file({asset})` is available with an external provider and
+reads `GET /api/files/ASSET.json`: `{attachment}` includes availability, metadata,
+an optional shortened text preview, and original/download URLs. Binary originals
+remain separate streamed media responses, including Range support; tool results
+do not inline arbitrary binary files. These actions do not enable article editing.

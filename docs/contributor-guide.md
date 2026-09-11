@@ -21,8 +21,11 @@ Linux and macOS are supported through the portable directory writer lock. Node
 24.19.0 is the tested minimum for the built-in SQLite implementation. CI runs the
 core suite on both platforms with 24.19.0 and 26.6.0; an engines lower bound is not proof that every
 intervening or future runtime works. Chromium exercises the actual editor and
-module loading. Native WebMCP remains a separate compatible-browser integration
-check; mocked registration and a Chromium editor test do not establish that support.
+module loading. `tests/browser/webmcp.spec.mjs` enables experimental web-platform features in the
+pinned Chromium and exercises native `document.modelContext` registration and
+execution with synthetic content. It tests read and write flows without a mock
+registration shim. Other browsers and agent-host integrations need their own
+compatibility checks.
 
 `examples/traces/codex.jsonl` and `pi.jsonl` are synthetic baseline fixtures.
 `tests/traces.test.mjs` adds typed/paginated Codex history, repeated representations,

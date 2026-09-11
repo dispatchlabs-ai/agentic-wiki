@@ -231,6 +231,7 @@ test("WebMCP registers discoverable schemas and invokes the underlying HTTP API"
       "wiki.traces",
       "wiki.trace",
       "wiki.save",
+      "wiki.preview",
     ],
   );
   const read = registered.find((r) => r.tool.name === "wiki.read").tool;
@@ -252,7 +253,7 @@ test("WebMCP registers discoverable schemas and invokes the underlying HTTP API"
   assert.ok(registered.every((r) => r.options.signal.aborted));
   const readonly = [];
   await registerTools({ registerTool: (t) => readonly.push(t) }, false);
-  assert.equal(readonly.length, 9);
+  assert.equal(readonly.length, 10);
 });
 
 test("failed index transactions keep reader and search on one snapshot, then recover", async (t) => {
@@ -423,7 +424,7 @@ test("preview sanitizes without mutating Git and enforces request boundaries", a
   const readonly = await server(t, { write: false });
   assert.equal(
     (await readonly.request("/api/articles/preview", options)).status,
-    403,
+    200,
   );
 });
 
