@@ -6,7 +6,7 @@ export const fileId = "b".repeat(64) + ".bin";
 export const imageId = "c".repeat(64) + ".png";
 export const pdfId = "d".repeat(64) + ".pdf";
 export async function evidenceFixture() {
-  const state = { delay: 0, offline: false, requests: [] };
+  const state = { delay: 0, offline: false, requests: [], harness: "claude" };
   const files = [
     {
       name: "notes.md",
@@ -42,13 +42,15 @@ export async function evidenceFixture() {
     text:
       i === 0
         ? "Prototype conversation with **source text**."
-        : "Recorded message " + i,
+        : i === 2
+          ? '# Files mentioned by the user:\n\n## diagram.png: /tmp/codex-remote-attachments/example/diagram.png\n\n## My request:\n# Please inspect this diagram\n\n<image name=[Image #1] path="/tmp/codex-remote-attachments/example/diagram.png">\n</image>'
+          : "Recorded message " + i,
     timestamp: "2026-01-01T10:00:00Z",
     line: i + 1,
     snapshot: "e".repeat(64),
     inherited: i === 0,
     rolled_back: i === 1,
-    attachments: i === 0 ? files : [],
+    attachments: i === 0 ? files : i === 2 ? [files[1]] : [],
   }));
   const tool = {
     id: "tool-event",
@@ -114,7 +116,7 @@ export async function evidenceFixture() {
 
       return json(200, {
         ...hit,
-        harness: "claude",
+        harness: state.harness,
         thread_id: "fixture-thread",
         parent_thread: "fixture-parent",
         kind,

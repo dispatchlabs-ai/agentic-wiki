@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3 — 2026-09-11
+
+- Fix oversized conversation headings and duplicate Codex attachment wrappers.
+- Show matched attachments once, retaining original recorded text in expandable
+  source details. Unknown wrappers and code examples remain literal.
+- Preserve API text, source records, citations, and captured files; no migration.
+
 ## 0.2.2 — 2026-09-11
 
 - Serve regular MCP over Streamable HTTP at `/mcp` in the existing wiki process.

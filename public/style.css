@@ -984,3 +984,21 @@ footer select {
     padding: 0.5rem;
   }
 }
+
+/* Conversation headings must not inherit article-title sizing. */
+.evidence-message > .prose h1 {
+  font-size: 1.5rem;
+}
+.evidence-message > .prose h2 {
+  font-size: 1.25rem;
+}
+.evidence-message > .prose h3 {
+  font-size: 1.125rem;
+}
+.evidence-message > .prose {
+  overflow-wrap: anywhere;
+}
+.original-message pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
