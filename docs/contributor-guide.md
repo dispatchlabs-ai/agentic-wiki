@@ -1,5 +1,9 @@
 # Contributor map
 
+New here? Start with the [walkthrough](getting-started.md) and pick a scoped issue
+from the [roadmap](roadmap.md). The contracts below describe sensitive internals;
+they are review criteria, not a list of beginner tasks.
+
 The engine owns serving, indexing, and revision-checked editing. Content and trace
 collection belong to the operator. Keep original Markdown/Git and JSONL recoverable;
 never introduce a second authoritative conversation representation.
@@ -36,7 +40,7 @@ the test, and assert original record values, dialogue classification and citatio
 lines. Never paste a real rollout into a fixture. Unknown records remain inspectable
 context; change `TRACE_VERSION` when projection or index interpretation changes.
 
-## Small contributions with clear completion criteria
+## Core contracts for behavior changes
 
 1. **Receipt correctness.** Preserve blob IDs and lifecycle numbering across edits,
    deletion/recreation and retries; include an end-to-end regression for any change.

@@ -30,6 +30,7 @@ const port = Number(process.env.PORT || 4317);
 createWiki({
   repo,
   traces,
+  evidenceUrl: null,
   database:
     process.env.WIKI_DATABASE || path.join(root, ".runtime/example.sqlite3"),
   origin: process.env.WIKI_ORIGIN || `http://127.0.0.1:${port}`,

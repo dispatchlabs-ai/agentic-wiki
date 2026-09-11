@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Isolate example startup from ambient external-evidence configuration; exercise
+  startup, saving, and restart without contacting an operator’s provider or pushing.
+- Add a visual introduction and a clone-to-agent walkthrough, including a personal
+  content repository, troubleshooting, and explicit client compatibility evidence.
+- Add a scoped contributor roadmap and release signature verification instructions;
+  align security reporting with the repository’s enabled private reporting channel.
+
 ## 0.2.3 — 2026-09-11
 
 - Fix oversized conversation headings and duplicate Codex attachment wrappers.
