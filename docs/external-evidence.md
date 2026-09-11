@@ -84,3 +84,27 @@ or silently shortened. Original files remain accessible through explicit file re
 For example, first call `wiki.trace` with `{id}`. Then request
 `{id, kind: "tool", after: "2026-01-01T10:00:00Z", before: "2026-01-01T10:05:00Z"}`.
 The same disclosure contract should be used by any future standalone MCP transport.
+
+## Optional event text windows
+
+Full event text is the default. Supply `textOffset` and/or `textLimit` only when
+partial text is useful. These are nonnegative integers measured in Unicode code
+points (combining marks count separately). Offset alone returns the remainder;
+`textLimit=0` returns length metadata without text. Each message returns
+`textWindow: {offset, returnedChars, totalChars, nextTextOffset, unit}` when a
+window is requested. Use `nextTextOffset` explicitly to continue, or omit both
+parameters to retrieve the full text. An offset at or beyond the end returns an
+empty chunk and null continuation. No truncation or summarization is imposed.
+
+Message pagination and time windows still select events; text windows select a
+portion of each selected event. For a single event, use `event` (the original wiki
+WebMCP tools name it `eventId`). External event aliases resolve to the canonical
+event; chunked event lookups return only that event. Imported trace messages have
+stable `line-N-part-P` ids to distinguish multiple parts of a mixed source record.
+Keep the same event, category and time bounds when continuing. A missing event or
+one outside the range returns no chunk. Aggregate analysis is not event text and
+does not accept these parameters. Text windows affect message text, not attachment
+content; original source records and captured files remain available separately.
+
+Example: `{id, event: "<event-id>", textOffset: 0, textLimit: 4000}` followed by
+the same request with `textOffset` set to the returned `nextTextOffset`.

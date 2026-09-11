@@ -109,3 +109,40 @@ test("recorded numeric pi timestamps remain eligible for time windows", () => {
   assert.equal(result.messages[0].timestamp, stamp);
   assert.equal(result.undatedCount, 0);
 });
+
+test("imported event ids select only the requested mixed-record part for optional chunks", () => {
+  const events = project(
+    [
+      {
+        line: 5,
+        value: {
+          type: "message",
+          message: {
+            role: "assistant",
+            content: [
+              { type: "text", text: "Answer" },
+              { type: "toolCall", name: "first", arguments: "abcdef" },
+              { type: "toolCall", name: "second", arguments: "uvwxyz" },
+            ],
+          },
+        },
+      },
+    ],
+    "pi",
+  );
+  const read = (q) =>
+    disclose(events, "a".repeat(64), disclosureOptions(new URLSearchParams(q)));
+  const all = read("kind=tool");
+  assert.equal(all.messages.length, 2);
+  assert.notEqual(all.messages[0].id, all.messages[1].id);
+  const id = all.messages[1].id;
+  const part = read(`kind=tool&event=${id}&textOffset=3&textLimit=7`);
+  assert.equal(part.messages.length, 1);
+  assert.equal(part.messages[0].text, all.messages[1].text.slice(3, 10));
+  assert.equal(part.messages[0].textWindow.nextTextOffset, 10);
+  assert.equal(
+    read(`kind=tool&event=${id}`).messages[0].text,
+    all.messages[1].text,
+  );
+  assert.equal(read("event=line-999-part-0&textLimit=5").eventFound, false);
+});

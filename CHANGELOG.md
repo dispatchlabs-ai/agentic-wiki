@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1 — 2026-09-11
+
+- Added optional `textOffset`/`textLimit` trace text windows. Full selected event
+  text remains the default; no automatic cap or summarization is introduced.
+- Window responses report total Unicode character length and continuation offsets.
+  Zero-length requests inspect size; chunks preserve exact original text.
+- Cited external event chunks exclude neighboring bodies. Imported messages expose
+  stable per-record-part event ids for targeted reads, including mixed pi records.
+- External providers must support the optional text-window parameters before
+  clients use them. Existing requests and original source access remain unchanged.
+
 ## 0.2.0 — 2026-09-11
 
 - Trace tools now disclose user prompts and assistant responses first. Tool calls,

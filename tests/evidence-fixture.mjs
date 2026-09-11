@@ -1,3 +1,4 @@
+import { textWindowOptions, textWindow } from "../src/text-window.mjs";
 import http from "node:http";
 import { once } from "node:events";
 export const evidenceId = "chat-" + "a".repeat(24);
@@ -97,6 +98,7 @@ export async function evidenceFixture() {
       let kind = url.searchParams.get("kind") || "dialogue",
         offset = Number(url.searchParams.get("offset") || 0);
       const event = url.searchParams.get("event");
+      const window = textWindowOptions(url.searchParams);
       if (event === "old-tool" || event === "tool-event") kind = "tool";
       if (event === "old-event" || event === "event-101") offset = 100;
       const after = url.searchParams.get("after") || "",
@@ -124,13 +126,20 @@ export async function evidenceFixture() {
         nextOffset: offset + limit < selected.length ? offset + limit : null,
         previousOffset: offset > 0 ? Math.max(0, offset - limit) : null,
         counts: { dialogue: 102, tool: 1 },
-        messages: selected.slice(offset, offset + limit).map((m) => ({
-          ...m,
-          attachments: (m.attachments || []).map((f) => {
-            const { preview, preview_truncated, ...meta } = f;
-            return url.searchParams.get("attachments") === "preview" ? f : meta;
-          }),
-        })),
+        messages: (event && window.textOffset !== undefined
+          ? selected.filter((m) => m.id === event || m.aliases?.includes(event))
+          : selected.slice(offset, offset + limit)
+        )
+          .map((m) => ({
+            ...m,
+            attachments: (m.attachments || []).map((f) => {
+              const { preview, preview_truncated, ...meta } = f;
+              return url.searchParams.get("attachments") === "preview"
+                ? f
+                : meta;
+            }),
+          }))
+          .map((m) => textWindow(m, window)),
         eventFound: event
           ? ["old-tool", "tool-event", "old-event", "event-101"].includes(event)
           : null,

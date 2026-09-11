@@ -1,3 +1,4 @@
+import { textWindowOptions } from "./text-window.mjs";
 import { WikiError } from "./errors.mjs";
 
 // Operator-selected read-only service. No content URL can select an upstream host.
@@ -129,10 +130,19 @@ export class EvidenceClient {
             "after",
             "before",
             "attachments",
+            "textOffset",
+            "textLimit",
           ].includes(k),
       )
     )
       throw new WikiError("INVALID_TRACE_PAGE", "Invalid evidence page");
+    try {
+      const window = textWindowOptions(new URLSearchParams(query));
+      if (query.kind === "analysis" && window.textOffset !== undefined)
+        throw Error("Aggregate analysis is not an event text window");
+    } catch (error) {
+      throw new WikiError("INVALID_TRACE_PAGE", error.message);
+    }
     const validTime = (v) =>
       !v ||
       (typeof v === "string" &&

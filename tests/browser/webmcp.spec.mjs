@@ -136,6 +136,34 @@ test("native WebMCP reads, paginates, previews and inspects originals", async ({
   });
   expect(event.kind).toBe("tool");
   expect(event.messages[0].id).toBe("tool-event");
+  const chunk = await call(page, "wiki.trace", {
+    id: evidenceId,
+    event: "old-tool",
+    textOffset: 9,
+    textLimit: 4,
+  });
+  expect(chunk.messages).toHaveLength(1);
+  expect(chunk.messages[0].text).toBe("tool");
+  expect(chunk.messages[0].textWindow).toMatchObject({
+    offset: 9,
+    returnedChars: 4,
+    totalChars: 20,
+    nextTextOffset: 13,
+  });
+  expect(
+    (
+      await call(page, "wiki.trace", {
+        id: evidenceId,
+        event: "old-tool",
+        textLimit: 0,
+      })
+    ).messages[0].text,
+  ).toBe("");
+  expect(
+    (await call(page, "wiki.trace", { id: evidenceId, event: "old-tool" }))
+      .messages[0].text,
+  ).toBe("Recorded tool output");
+
   const before = git(repo, ["rev-parse", "HEAD"]);
   const preview = await call(page, "wiki.preview", {
     body: "**Preview** <script>alert(1)</script>",

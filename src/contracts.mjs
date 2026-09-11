@@ -13,7 +13,7 @@
  * @typedef {{id:string,format:Harness,page:number,pages:number,total_records:number,records:TraceEvent[],html:string}} RenderedTrace
  * @typedef {{transport:"file",path:string,directory:string,size:number}} SpoolResult
  * @typedef {ReturnType<typeof import("./trace-disclosure.mjs").disclose>} DisclosedTrace
- * @typedef {{disclosure?:{kind:string,after:string,before:string,page:number},root:string,metadata:TraceMetadata,page?:number,start?:number,end?:number,directory?:string}} WorkerRequest
+ * @typedef {{disclosure?:ReturnType<typeof import("./trace-disclosure.mjs").disclosureOptions>,root:string,metadata:TraceMetadata,page?:number,start?:number,end?:number,directory?:string}} WorkerRequest
  * @typedef {{type:"result",result:RenderedTrace|DisclosedTrace|SpoolResult|null,size:number}|{type:"error",error:string,code?:string,status?:number}} WorkerMessage
  */
 export {};

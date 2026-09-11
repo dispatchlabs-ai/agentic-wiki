@@ -1,3 +1,4 @@
+import { textWindowOptions, textWindow } from "./text-window.mjs";
 // Agent projection only. Raw source values remain available through traceLines.
 import { WikiError } from "./errors.mjs";
 export function disclosureOptions(params) {
@@ -26,12 +27,21 @@ export function disclosureOptions(params) {
       "INVALID_TRACE_PAGE",
       "Invalid trace category, page or time range",
     );
-  return { kind, after, before, page };
+  let window;
+  try {
+    window = textWindowOptions(params);
+  } catch (error) {
+    throw new WikiError("INVALID_TRACE_PAGE", error.message);
+  }
+  const event = params.get("event") || "";
+  if (event && !/^line-\d+-part-\d+$/.test(event))
+    throw new WikiError("INVALID_TRACE_PAGE", "Invalid event id");
+  return { kind, after, before, page, event, ...window };
 }
 export function disclose(events, id, options) {
   const eventTime = (m) =>
     typeof m.timestamp === "number" ? m.timestamp : Date.parse(m.timestamp);
-  const items = events.flatMap((event, index) => {
+  const projected = events.flatMap((event, index) => {
     const { value, blocks, ...metadata } = event;
     const base = {
       ...metadata,
@@ -63,6 +73,12 @@ export function disclose(events, id, options) {
     }
     return [base];
   });
+  const parts = new Map();
+  const items = projected.map((m) => {
+    const part = parts.get(m.line) || 0;
+    parts.set(m.line, part + 1);
+    return { ...m, id: `line-${m.line}-part-${part}` };
+  });
   const category = (m) =>
     ["user", "assistant"].includes(m.kind)
       ? "dialogue"
@@ -73,6 +89,7 @@ export function disclose(events, id, options) {
   const selected = items.filter(
     (m) =>
       category(m) === kind &&
+      (!options.event || m.id === options.event) &&
       ((!after && !before) ||
         (Number.isFinite(eventTime(m)) &&
           (!after || eventTime(m) >= Date.parse(after)) &&
@@ -96,6 +113,9 @@ export function disclose(events, id, options) {
         items.filter((m) => category(m) === k).length,
       ]),
     ),
-    messages: selected.slice((page - 1) * 100, page * 100),
+    eventFound: options.event ? selected.length > 0 : null,
+    messages: selected
+      .slice((page - 1) * 100, page * 100)
+      .map((m) => textWindow(m, options)),
   };
 }

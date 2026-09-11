@@ -209,6 +209,18 @@ export async function registerTools(context, writable, config = {}) {
               : "^[a-f0-9]{64}$",
           },
           page: { type: "integer", minimum: 1 },
+          textOffset: {
+            type: "integer",
+            minimum: 0,
+            description:
+              "Optional per-event Unicode character offset; full text by default.",
+          },
+          textLimit: {
+            type: "integer",
+            minimum: 0,
+            description:
+              "Optional per-event character count; 0 returns length only. Continue with textWindow.nextTextOffset.",
+          },
           ...(config.externalEvidence
             ? {
                 limit: { type: "integer", minimum: 1, maximum: 100 },
@@ -236,6 +248,11 @@ export async function registerTools(context, writable, config = {}) {
                 offset: { type: "integer", minimum: 0, maximum: 1000000 },
               }
             : {
+                event: {
+                  type: "string",
+                  description:
+                    "Event id from messages; selects that event within the category and time range.",
+                },
                 kind: {
                   type: "string",
                   enum: ["dialogue", "tool", "reasoning", "context"],
