@@ -94,6 +94,15 @@ test("rich articles and conversations work from small phone to large desktop", a
         await expect(
           page.frameLocator(".diagram iframe").locator("svg"),
         ).toBeVisible();
+        await expect(page.locator(".render-diagram")).toHaveText(
+          "Diagram shown",
+        );
+        await page.locator(".diagram").screenshot({
+          path: path.join(
+            review,
+            `${width}-${theme}-${route.startsWith("/traces") ? "conversation" : "article"}-diagram.png`,
+          ),
+        });
         expect(
           await page.evaluate(
             () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -116,6 +125,7 @@ test("rich articles and conversations work from small phone to large desktop", a
             { exact: true },
           ),
         ).toBeVisible();
+        await page.keyboard.press("Control+Home");
         await page.screenshot({
           path: path.join(
             review,

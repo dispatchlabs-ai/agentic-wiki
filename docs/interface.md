@@ -69,3 +69,6 @@ asset setup. Shadcn/Base UI supplies the search dialog and content tabs; ordinar
 server-rendered navigation and forms retain native behavior. Search opens with
 Ctrl/Command+K. Rich-feature tests cover keyboard focus, no-JavaScript reading,
 isolated Mermaid rendering, preview parity and live content commits.
+
+Article sidebars move below the reading column through 1000px, avoiding a cramped
+tablet column. General filter/editor breakpoints remain at 760px.
