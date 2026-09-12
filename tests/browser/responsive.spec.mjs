@@ -174,7 +174,7 @@ test("mobile filters, source anchors and preview preserve useful interactions", 
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(base + "/wiki/");
-  await page.getByText("Browse topics", { exact: true }).click();
+  await page.getByText("Filter articles", { exact: true }).click();
   await page.getByLabel("Topic", { exact: true }).selectOption("Research");
   await page.getByRole("button", { name: "Apply filters" }).click();
   await expect(
@@ -282,4 +282,41 @@ test("provenance pages expose navigable citations on mobile", async ({
   );
   await page.getByRole("link", { name: /Imported .*line/ }).click();
   await expect(page.locator("#line-3")).toHaveCount(1);
+});
+
+test("home components keep search, article previews and navigation clear", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(base + "/");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Recent updates",
+  );
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(
+    nav.getByRole("link", { name: "Articles", exact: true }),
+  ).toHaveAttribute("href", "/wiki/");
+  await expect(
+    nav.getByRole("link", { name: "Conversations", exact: true }),
+  ).toHaveAttribute("href", "/traces/");
+  const card = page.locator(".article-card").filter({
+    has: page.getByRole("heading", { name: "Atlas Labs", exact: true }),
+  });
+  await expect(card).toContainText(
+    "Applied research, prototypes, and decisions grounded in evidence.",
+  );
+  await expect(card).not.toContainText(
+    "Choose a limited pilot with recorded results",
+  );
+  await expect(card.getByRole("link", { name: "Read article" })).toHaveCount(0);
+  await expect(
+    card.getByRole("link", { name: "View changes to Atlas Labs" }),
+  ).toHaveAttribute("href", /compare/);
+  const trigger = page.locator(".quick-search-trigger");
+  await trigger.click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("searchbox").fill("prototype");
+  await dialog.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page).toHaveURL(/\/search\/\?q=prototype/);
+  await expect(page.locator("#search-query")).toHaveValue("prototype");
 });

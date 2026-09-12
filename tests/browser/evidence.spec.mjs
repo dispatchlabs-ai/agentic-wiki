@@ -56,7 +56,7 @@ test("articles appear before a delayed trace query; typing updates both groups a
     "Prototype guide",
   );
   await expect(page.locator("#trace-results")).toContainText(
-    "Searching traces",
+    "Searching conversations",
   );
   await expect(page.locator("#trace-results")).toContainText(
     "Prototype archive discussion",

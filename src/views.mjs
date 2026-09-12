@@ -1,3 +1,7 @@
+import { SearchForm } from "../ui/components/search.mjs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ArticleCard, UpdatePeriod } from "../ui/components/site.mjs";
 import { articleResults, traceResults } from "../public/search-results.js";
 import { catalogOptions, sortedSnapshots, sessions } from "./trace-catalog.mjs";
 import {
@@ -45,26 +49,30 @@ export function home(wiki, params) {
     .slice(0, 6);
   return shell(
     "Home",
-    `<div class="layout"><div><h1>What’s new in your wiki</h1><p class="lede">Recent updates, open questions, and the evidence behind them.</p><h2>Recent updates</h2><nav class="tabs" aria-label="Update period">${[
-      ["today", "Today"],
-      ["week", "This week"],
-      ["all", "All changes"],
-    ]
-      .map(
-        ([v, l]) =>
-          `<a href="/?range=${v}"${range === v ? ' aria-current="page"' : ""}>${l}</a>`,
-      )
-      .join("")}</nav>${
+    `<div class="layout home-layout"><div class="home-feed"><h1>Recent updates</h1><p class="lede">The latest from your wiki.</p>${renderToStaticMarkup(createElement(UpdatePeriod, { range }))}${
       recent.length
         ? recent
             .map((p) => {
-              const current = wiki.current(p.id);
-              return `<section class="entry"><p class="eyebrow">${date(p.updated_at)} · ${p.number === 1 ? "Created" : "Updated"}</p><h2>${link(p.url, p.title)}</h2><p>${e(current.summary || p.description)}</p><div class="actions">${link(p.url, "Read article →")}${p.number > 1 ? link(queryLink(`/wiki/${p.id}/compare/`, { from: p.number - 1, to: p.number }), "View changes") : ""}</div></section>`;
+              return renderToStaticMarkup(
+                createElement(ArticleCard, {
+                  title: p.title,
+                  href: p.url,
+                  description: p.description,
+                  metadata: `${date(p.updated_at)} · ${p.number === 1 ? "Created" : "Updated"}`,
+                  changesHref:
+                    p.number > 1
+                      ? queryLink(`/wiki/${p.id}/compare/`, {
+                          from: p.number - 1,
+                          to: p.number,
+                        })
+                      : undefined,
+                }),
+              );
             })
             .join("")
         : empty("No updates in this period.")
-    }<p class="pagination">${link("/wiki/", "Browse all articles →")}</p></div><aside class="sidebar"><section><h2>Open questions</h2>${questions.length ? questions.map(({ q, p }) => `<p>${e(q)}<br>${link(`/wiki/${p.id}/`, p.title)}</p>`).join("") : empty("No open questions recorded.")}</section><section><h2>Explore topics</h2>${list(topicNames(wiki).map((t) => link(queryLink("/wiki/", { topic: t }), t)))}</section><section><h2>Follow the evidence</h2><p>Read the original conversations behind your articles.</p>${link("/traces/", "Browse traces →")}</section></aside></div>`,
-    { active: "Home" },
+    }<p class="pagination">${link("/wiki/", "Browse all articles →")}</p></div><aside class="sidebar"><section><h2>Open questions</h2>${questions.length ? questions.map(({ q, p }) => `<p>${e(q)}<br>${link(`/wiki/${p.id}/`, p.title)}</p>`).join("") : empty("No open questions recorded.")}</section><section><h2>Explore topics</h2>${list(topicNames(wiki).map((t) => link(queryLink("/wiki/", { topic: t }), t)))}</section><section><h2>Follow the evidence</h2><p>Read the original conversations behind your articles.</p>${link("/traces/", "Browse conversations →")}</section></aside></div>`,
+    { active: "Home", className: "home-page" },
   );
 }
 export function topics(wiki, params) {
@@ -79,9 +87,9 @@ export function topics(wiki, params) {
         : a.title.localeCompare(b.title),
     );
   return shell(
-    "Topics",
-    `<h1>Explore topics</h1><p class="lede">Browse the people, organizations, and ideas in your wiki.</p><div class="filter-layout"><details class="filter-panel" data-responsive-details open><summary>Browse topics</summary><form class="filter-form" action="/wiki/">${topicSelect(wiki, topic)}<label>Sort<select name="sort">${option("title", "Title A–Z", sort)}${option("updated", "Recently updated", sort)}</select></label><button>Apply filters</button></form></details><div><p class="meta">${pages.length} articles${topic ? ` · ${e(topic)}` : ""}</p>${pages.length ? pages.map((p) => `<section class="entry"><h2>${link(p.url, p.title)}</h2><p>${e(p.description)}</p><p class="meta">${e(p.topic)} · Updated ${date(p.updated_at)}</p></section>`).join("") : empty("No articles match this topic.")}</div></div>`,
-    { active: "Topics" },
+    "Articles",
+    `<h1>Articles</h1><p class="lede">Browse the people, organizations, and ideas in your wiki.</p><div class="filter-layout"><details class="filter-panel" data-responsive-details open><summary>Filter articles</summary><form class="filter-form" action="/wiki/">${topicSelect(wiki, topic)}<label>Sort<select name="sort">${option("title", "Title A–Z", sort)}${option("updated", "Recently updated", sort)}</select></label><button>Apply filters</button></form></details><div><p class="meta">${pages.length} articles${topic ? ` · ${e(topic)}` : ""}</p>${pages.length ? pages.map((p) => `<section class="entry"><h2>${link(p.url, p.title)}</h2><p>${e(p.description)}</p><p class="meta">${e(p.topic)} · Updated ${date(p.updated_at)}</p></section>`).join("") : empty("No articles match this topic.")}</div></div>`,
+    { active: "Articles" },
   );
 }
 function comparisonForm(id, history, from, to) {
@@ -107,7 +115,7 @@ export function historyView(wiki, id) {
       .join(
         "",
       )}</tbody></table></div><aside class="sidebar"><h2>About this history</h2><p>Each revision is preserved in Git. Compare two revisions to see the recorded changes.</p>${link(p.url, "Current article")}</aside></div>`,
-    { active: "Topics" },
+    { active: "Articles" },
   );
 }
 // Bounded line alignment. Large replacements use common prefix/suffix rather
@@ -228,7 +236,7 @@ export async function compareView(wiki, id, params) {
               .map((h) => `Revision ${h.number}: ${e(h.summary)}`),
           )
     }<p>${link(`/wiki/${id}/sources/?revision=${to}`, `Sources in revision ${to}`)}</p></section>`,
-    { active: "Topics" },
+    { active: "Articles" },
   );
 }
 export function sourcesView(wiki, id, params) {
@@ -241,7 +249,7 @@ export function sourcesView(wiki, id, params) {
   return shell(
     `${p.title} sources`,
     `${articleHeader(p, "Sources", { historical: !!rev })}<div class="layout"><div><h2>Supporting evidence</h2><p class="muted">Links recorded in this article’s Markdown and source metadata.</p>${evidence.length ? evidence.map((s, i) => `<section class="entry" id="source-${i + 1}"><h3>${i + 1}. ${e(s.title)}</h3><p class="meta">${s.url.startsWith("/traces/") ? "Agent trace" : "Source link"}</p>${s.quote ? `<blockquote>${e(s.quote)}</blockquote>` : ""}<p>${link(s.url, "Open original passage")}</p><details><summary>Source details</summary><p class="meta">${e(s.url)}</p></details></section>`).join("") : empty("No source links are recorded in this revision.")}</div><aside class="sidebar"><h2>Article context</h2><p>Revision ${p.number} · ${date(p.created_at)}</p>${link(rev ? `/wiki/${id}/revision/${p.number}/` : p.url, "Read article")}</aside></div>`,
-    { active: "Topics" },
+    { active: "Articles" },
   );
 }
 export function editorView(p, write) {
@@ -249,12 +257,12 @@ export function editorView(p, write) {
     return shell(
       "Read-only",
       `<h1>This wiki is read-only</h1><p>${link(p.url, "Return to article")}</p>`,
-      { active: "Topics" },
+      { active: "Articles" },
     );
   return shell(
     `Edit ${p.title}`,
-    `<p class="breadcrumb">${link("/wiki/", "Topics")} / ${link(p.url, p.title)} / Edit</p><h1>Edit article</h1><p class="meta" id="editing-revision">Editing revision ${p.number}</p><form id="editor" data-id="${p.id}"><label>Title<input name="title" required maxlength="200"></label><label>Description<input name="description" required maxlength="600"></label><label>Topic<input name="topic" required maxlength="100"></label><div class="tabs" role="tablist" aria-label="Editor view"><button type="button" role="tab" aria-selected="true" data-editor-mode="write">Write</button><button type="button" role="tab" aria-selected="false" data-editor-mode="preview">Preview</button><button type="button" role="tab" aria-selected="false" class="split-control" data-editor-mode="split">Split</button></div><div class="editor-panes" data-mode="write"><div class="write-pane"><label>Markdown<textarea name="body" required maxlength="100000" rows="24"></textarea></label></div><div class="preview-pane"><h2 id="preview-title"></h2><p id="preview-description" class="muted"></p><article id="preview-body" class="typeset typeset-docs"></article><p id="preview-status" aria-live="polite"></p></div></div><label>Change summary<input name="summary" required maxlength="1000"></label><p class="muted">If someone saves a newer revision, you’ll need to review it before saving your draft.</p><div class="actions editor-actions"><button type="submit" disabled>Save revision</button><a class="button secondary" href="${p.url}">Cancel</a></div><p role="status" id="status">Loading current revision…</p></form>`,
-    { active: "Topics" },
+    `<p class="breadcrumb">${link("/wiki/", "Articles")} / ${link(p.url, p.title)} / Edit</p><h1>Edit article</h1><p class="meta" id="editing-revision">Editing revision ${p.number}</p><form id="editor" data-id="${p.id}"><label>Title<input name="title" required maxlength="200"></label><label>Description<input name="description" required maxlength="600"></label><label>Topic<input name="topic" required maxlength="100"></label><div class="tabs" role="tablist" aria-label="Editor view"><button type="button" role="tab" aria-selected="true" data-editor-mode="write">Write</button><button type="button" role="tab" aria-selected="false" data-editor-mode="preview">Preview</button><button type="button" role="tab" aria-selected="false" class="split-control" data-editor-mode="split">Split</button></div><div class="editor-panes" data-mode="write"><div class="write-pane"><label>Markdown<textarea name="body" required maxlength="100000" rows="24"></textarea></label></div><div class="preview-pane"><h2 id="preview-title"></h2><p id="preview-description" class="muted"></p><article id="preview-body" class="typeset typeset-docs"></article><p id="preview-status" aria-live="polite"></p></div></div><label>Change summary<input name="summary" required maxlength="1000"></label><p class="muted">If someone saves a newer revision, you’ll need to review it before saving your draft.</p><div class="actions editor-actions"><button type="submit" disabled>Save revision</button><a class="button secondary" href="${p.url}">Cancel</a></div><p role="status" id="status">Loading current revision…</p></form>`,
+    { active: "Articles" },
   );
 }
 function traceProvenance(hit) {
@@ -270,15 +278,20 @@ export function searchView(wiki, params, articles, traces) {
     topic = params.get("topic") || "",
     format = params.get("format") || "",
     machine = params.get("machine") || "";
-  const hidden = Object.entries({ type, state, topic, format, machine })
-    .map(([k, v]) => `<input type="hidden" name="${k}" value="${e(v)}">`)
-    .join("");
   return shell(
     "Search",
-    `<h1>Search the wiki</h1><form class="search-form" action="/search/" role="search" data-live-search><label class="sr-only" for="search-query">Search query</label><input id="search-query" name="q" type="search" value="${e(q)}" maxlength="300" placeholder="Search articles and traces">${hidden}<button>Search</button></form><nav class="tabs" aria-label="Search type">${[
+    `<h1>Search the wiki</h1>${renderToStaticMarkup(
+      createElement(SearchForm, {
+        id: "search-query",
+        query: q,
+        hidden: { type, state, topic, format, machine },
+        live: true,
+        label: "Search query",
+      }),
+    )}<nav class="tabs" aria-label="Search type">${[
       ["all", "All"],
       ["articles", "Articles"],
-      ["traces", "Traces"],
+      ["traces", "Conversations"],
     ]
       .map(([v, l]) => {
         const p = new URLSearchParams(params);
@@ -289,10 +302,10 @@ export function searchView(wiki, params, articles, traces) {
       })
       .join(
         "",
-      )}</nav><div class="layout"><div>${type !== "traces" ? `<h2>Articles</h2><div id="article-results" aria-live="polite">${articleResults(articles, params)}</div>` : ""}${type !== "articles" ? `<h2>Traces</h2><div id="trace-results" aria-live="polite"${traces.pending ? ' data-pending="true"' : ""}>${traceResults(traces, params)}</div>${traces.pending ? `<noscript>${link(queryLink("/search/", Object.fromEntries([...params.entries(), ["sync", "1"]])), "Load trace results")}</noscript>` : ""}` : ""}</div><aside class="sidebar"><details data-responsive-details open><summary>Filter results</summary><form class="filter-form" action="/search/"><input type="hidden" name="q" value="${e(q)}"><label>Type<select name="type">${[
+      )}</nav><div class="layout"><div>${type !== "traces" ? `<h2>Articles</h2><div id="article-results" aria-live="polite">${articleResults(articles, params)}</div>` : ""}${type !== "articles" ? `<h2>Conversations</h2><div id="trace-results" aria-live="polite"${traces.pending ? ' data-pending="true"' : ""}>${traceResults(traces, params)}</div>${traces.pending ? `<noscript>${link(queryLink("/search/", Object.fromEntries([...params.entries(), ["sync", "1"]])), "Load conversation results")}</noscript>` : ""}` : ""}</div><aside class="sidebar"><details data-responsive-details open><summary>Filter results</summary><form class="filter-form" action="/search/"><input type="hidden" name="q" value="${e(q)}"><label>Type<select name="type">${[
       ["all", "All"],
       ["articles", "Articles"],
-      ["traces", "Traces"],
+      ["traces", "Conversations"],
     ]
       .map(([v, l]) => option(v, l, type))
       .join(
@@ -355,8 +368,8 @@ export function tracesView(catalog, params, search, catalogResult = null) {
     return `<section class="entry"><h2>${link(t.url, t.title)}</h2><p class="meta">${e(t.format)}${grouped ? ` · ${item.snapshot_count} ${item.snapshot_count === 1 ? "snapshot" : "snapshots"} · Latest import ${date(t.imported_at)}` : `${t.records ? ` · ${t.records} source records` : ""}${t.imported_at ? ` · Imported ${date(t.imported_at)}` : ""}`}</p>${grouped && item.session_id ? `<p>${link(snapshotsUrl, "View session snapshots")}</p>` : ""}${t.snippet ? `<p>${e(t.snippet)}</p><p>${link(t.url, `Open passage · line ${t.line}`)}</p>${traceProvenance(t)}` : ""}</section>`;
   };
   return shell(
-    "Traces",
-    `<h1>Agent traces</h1><p class="lede">Original conversations, decisions, and supporting evidence.</p><nav class="tabs" aria-label="Trace catalog view">${link("/traces/", "Sessions")}${link("/traces/?view=snapshots", "All snapshots")}</nav><form class="search-form" action="/traces/" role="search"><label class="sr-only" for="trace-query">Search trace dialogue</label><input id="trace-query" name="q" type="search" value="${e(q)}" maxlength="300" placeholder="Search trace dialogue"><input type="hidden" name="format" value="${format}"><button>Search</button></form><div class="filter-layout"><details class="filter-panel" data-responsive-details open><summary>Filters</summary><form class="filter-form" action="/traces/"><input type="hidden" name="q" value="${e(q)}"><input type="hidden" name="view" value="${grouped ? "sessions" : "snapshots"}">${session_id ? `<input type="hidden" name="session_id" value="${e(session_id)}">` : ""}<label>Harness<select name="format">${option("", "All", format)}${option("codex", "Codex", format)}${option("pi", "pi", format)}</select></label><button>Apply filters</button></form></details><div><p class="meta">${q ? "Matching dialogue passages" : `${catalogResult?.total ?? sorted.length} ${grouped ? "sessions" : "snapshots"} · Most recently imported first`}</p>${session_id ? `<p>Session: ${e(session_id)}</p>` : ""}${search.error ? `<p class="notice warning" role="status">${e(search.error)}</p>` : q && !search.indexed ? empty("Trace dialogue search is not available for this archive yet.") : selected.length ? selected.map(entry).join("") : empty(q ? "No matching trace passages." : "No traces have been imported.")}<nav class="pagination" aria-label="Trace pages">${offset > 0 ? link(queryLink("/traces/", { q, format, view: grouped ? "sessions" : "snapshots", session_id, offset: Math.max(0, offset - 20) }), "Previous") : ""}${next !== null ? link(queryLink("/traces/", { q, format, view: grouped ? "sessions" : "snapshots", session_id, offset: next }), "Next") : ""}</nav></div></div>`,
-    { active: "Traces" },
+    "Conversations",
+    `<h1>Conversations</h1><p class="lede">Original conversations, decisions, and supporting evidence.</p><nav class="tabs" aria-label="Trace catalog view">${link("/traces/", "Sessions")}${link("/traces/?view=snapshots", "All snapshots")}</nav><form class="search-form" action="/traces/" role="search"><label class="sr-only" for="trace-query">Search conversations</label><input id="trace-query" name="q" type="search" value="${e(q)}" maxlength="300" placeholder="Search conversations"><input type="hidden" name="format" value="${format}"><button>Search</button></form><div class="filter-layout"><details class="filter-panel" data-responsive-details open><summary>Filters</summary><form class="filter-form" action="/traces/"><input type="hidden" name="q" value="${e(q)}"><input type="hidden" name="view" value="${grouped ? "sessions" : "snapshots"}">${session_id ? `<input type="hidden" name="session_id" value="${e(session_id)}">` : ""}<label>Harness<select name="format">${option("", "All", format)}${option("codex", "Codex", format)}${option("pi", "pi", format)}</select></label><button>Apply filters</button></form></details><div><p class="meta">${q ? "Matching dialogue passages" : `${catalogResult?.total ?? sorted.length} ${grouped ? "sessions" : "snapshots"} · Most recently imported first`}</p>${session_id ? `<p>Session: ${e(session_id)}</p>` : ""}${search.error ? `<p class="notice warning" role="status">${e(search.error)}</p>` : q && !search.indexed ? empty("Trace dialogue search is not available for this archive yet.") : selected.length ? selected.map(entry).join("") : empty(q ? "No matching trace passages." : "No traces have been imported.")}<nav class="pagination" aria-label="Trace pages">${offset > 0 ? link(queryLink("/traces/", { q, format, view: grouped ? "sessions" : "snapshots", session_id, offset: Math.max(0, offset - 20) }), "Previous") : ""}${next !== null ? link(queryLink("/traces/", { q, format, view: grouped ? "sessions" : "snapshots", session_id, offset: next }), "Next") : ""}</nav></div></div>`,
+    { active: "Conversations" },
   );
 }

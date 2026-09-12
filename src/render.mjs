@@ -1,3 +1,6 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { SiteHeader, SiteFooter } from "../ui/components/site.mjs";
 import rehypeKatex from "rehype-katex";
 import {
   richStructures,
@@ -183,18 +186,7 @@ export const queryLink = (pathname, params) =>
     ),
   ).toString();
 export function shell(title, body, { active = "", className = "" } = {}) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><title>${escape(title)} · Agentic Wiki</title><script src="/assets/theme.js"></script><link rel="stylesheet" href="/assets/theme.css"><link rel="stylesheet" href="/assets/typeset.css"><link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/ui.css"><script type="module" src="/assets/vendor/ui.js"></script><script type="module" src="/assets/client.js"></script></head><body><a class="skip-link" href="#main">Skip to content</a><header class="site-header"><a href="/" class="brand"><span class="brand-lockup"><span class="brand-mark" aria-hidden="true"></span><span>Agentic Wiki</span></span><span class="brand-subtitle">Memory, with a path back to the evidence</span></a><nav class="site-nav" aria-label="Main navigation">${[
-    ["/", "Home"],
-    ["/wiki/", "Topics"],
-    ["/traces/", "Traces"],
-  ]
-    .map(
-      ([url, name]) =>
-        `<a href="${url}"${active === name ? ' aria-current="page"' : ""}>${name}</a>`,
-    )
-    .join(
-      "",
-    )}</nav><form class="header-search" action="/search/" role="search"><label class="sr-only" for="header-query">Search the wiki</label><input id="header-query" name="q" type="search" placeholder="Search the wiki" maxlength="300"><button>Search</button></form><span id="quick-search"></span><a class="mobile-search" href="/search/">Search</a></header><main id="main" class="${escape(className)}">${body}</main><footer><span>Agentic Wiki · ${link("/api/articles/authoring.json", "Agent API")}</span><label>Appearance<select id="appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></footer></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><title>${escape(title)} · Agentic Wiki</title><script src="/assets/theme.js"></script><link rel="stylesheet" href="/assets/theme.css"><link rel="stylesheet" href="/assets/typeset.css"><link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/ui.css"><script type="module" src="/assets/vendor/ui.js"></script><script type="module" src="/assets/client.js"></script></head><body><a class="skip-link" href="#main">Skip to content</a>${renderToStaticMarkup(createElement(SiteHeader, { active }))}<main id="main" class="${escape(className)}">${body}</main>${renderToStaticMarkup(createElement(SiteFooter))}</body></html>`;
 }
 export function sources(page) {
   const found = new Map();
@@ -244,7 +236,7 @@ export function articleHeader(
   active = "Article",
   { write = false, historical = false } = {},
 ) {
-  return `<p class="breadcrumb">${link("/wiki/", "Topics")} / ${link(queryLink("/wiki/", { topic: p.topic }), p.topic)}</p>${historical ? `<div class="notice warning">Earlier revision · Revision ${p.number} · ${link(`/wiki/${p.id}/`, "View current article")}</div>` : ""}<h1>${escape(p.title)}</h1><p class="lede">${escape(p.description)}</p><nav class="tabs" aria-label="Article views">${[
+  return `<p class="breadcrumb">${link("/wiki/", "Articles")} / ${link(queryLink("/wiki/", { topic: p.topic }), p.topic)}</p>${historical ? `<div class="notice warning">Earlier revision · Revision ${p.number} · ${link(`/wiki/${p.id}/`, "View current article")}</div>` : ""}<h1>${escape(p.title)}</h1><p class="lede">${escape(p.description)}</p><nav class="tabs" aria-label="Article views">${[
     [`/wiki/${p.id}/`, "Article"],
     [`/wiki/${p.id}/history/`, "History"],
     [
@@ -290,6 +282,6 @@ export async function article(
             .join("")}</section>`
         : ""
     }</article></div><aside class="sidebar">${toc.length ? `<section class="desktop-toc"><h2>On this page</h2>${tocLinks}</section>` : ""}<div class="article-side-links">${related.length ? `<section><h2>Related articles</h2>${list(related.map((p) => link(p.url, p.title)))}</section>` : ""}<section><h2>Linked from</h2>${index.backlinks(id).length ? list(index.backlinks(id).map((p) => link(`/wiki/${p.id}/`, p.title))) : '<p class="muted">No incoming article links yet.</p>'}</section></div></aside></div>`,
-    { active: "Topics" },
+    { active: "Articles" },
   );
 }

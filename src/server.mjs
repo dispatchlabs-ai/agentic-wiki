@@ -494,7 +494,7 @@ export function createWiki({
               shell(
                 "Source citations",
                 `<h1>Source citations</h1><p>${result.snapshot_count} snapshots · ${result.total} citations</p>${list(result.provenance.map((p) => link(p.url, `Imported ${p.imported_at} · line ${p.line}`)))}${result.nextOffset === null ? "" : link(`/traces/provenance/?key=${result.logical_key}&offset=${result.nextOffset}`, "Next citations")}`,
-                { active: "Traces" },
+                { active: "Conversations" },
               ),
               "text/html",
             );

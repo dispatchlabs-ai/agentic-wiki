@@ -6,7 +6,7 @@ Good documentation connects an explanation to its evidence. It should work on a 
 > This example uses synthetic information. The Markdown remains the authoritative source.
 
 > [!TIP]
-> Press **Find anything** to open search. Use the arrow keys to switch content tabs.
+> Press **Search** to open search. Use the arrow keys to switch content tabs.
 
 ### Structured information
 

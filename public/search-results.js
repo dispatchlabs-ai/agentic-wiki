@@ -25,7 +25,7 @@ export function articleResults(data, params) {
 }
 export function traceResults(data, params) {
   if (data.pending)
-    return '<p class="meta" role="status">Searching traces…</p>';
+    return '<p class="meta" role="status">Searching conversations…</p>';
   if (data.error)
     return `<p class="notice warning" role="status">${e(data.error)}</p>`;
   if (!(params.get("q") || "").trim())

@@ -143,10 +143,13 @@ test("search dialog traps focus, dismisses with Escape and restores the trigger"
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(base + "/wiki/guide/");
-  const trigger = page.getByRole("button", { name: /Find anything/ });
+  const trigger = page.getByRole("button", { name: /^Search$/ });
   await trigger.click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByLabel("Search terms").fill("knowledge");
+  await page
+    .getByRole("dialog")
+    .getByLabel("Search the wiki")
+    .fill("knowledge");
   for (let i = 0; i < 12; i++) {
     await page.keyboard.press("Tab");
     await expect

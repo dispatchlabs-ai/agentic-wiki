@@ -32,7 +32,14 @@ test(
       fs.rmSync(root, { recursive: true, force: true });
     });
     const source = fileURLToPath(new URL("../", import.meta.url));
-    for (const name of ["src", "public", "scripts", "examples", "package.json"])
+    for (const name of [
+      "src",
+      "ui",
+      "public",
+      "scripts",
+      "examples",
+      "package.json",
+    ])
       fs.cpSync(path.join(source, name), path.join(root, name), {
         recursive: true,
       });

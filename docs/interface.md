@@ -1,7 +1,7 @@
 # Responsive interface
 
 The same server-rendered pages serve desktop and mobile. The interface covers
-home activity, topics, articles, history, comparisons, sources, editing, article
+home activity, the article catalog, articles, history, comparisons, sources, editing, article
 and trace search, the trace catalog, and trace reading.
 
 ## Layout and appearance
@@ -87,3 +87,19 @@ remains editable system-font text rather than outlined proprietary type.
 Regenerate these assets with `node scripts/build-brand.mjs`. The geometry was
 manually constructed following an AI-generated concept and independent design
 review; the shipped SVGs contain no embedded raster images or external resources.
+
+## Shared shell components
+
+`ui/components/site.mjs` defines Brand, SiteNavigation, SiteHeader, SiteFooter,
+UpdatePeriod and ArticleCard. Node renders these React components to static HTML
+on each page render; there is no content compilation or full-page hydration.
+`ui/components/search.mjs` shares SearchForm and SearchIcon between the shell,
+results page and `quick-search.jsx` dialog. Base UI still owns dialog behavior.
+
+Navigation says Articles and Conversations; topic remains an article filter.
+Existing `/wiki/`, `/traces/`, API routes and search filter values are unchanged.
+The home page has one Recent updates heading, 22px mobile feed titles and a
+Search trigger with an icon. Cards show an excerpt of the article description
+(up to 180 characters at a word boundary), rather than the internal edit summary.
+The title opens the article; View changes opens the revision comparison. Full
+descriptions and original change summaries remain on article and history pages.

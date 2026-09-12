@@ -83,7 +83,7 @@ async function run({
     header.payload?.history_base;
   const html = shell(
     metadata.title,
-    `<p class="breadcrumb">${link("/traces/", "Traces")} / ${escape(metadata.format)}</p><h1>${escape(metadata.title)}</h1><p class="lede">${events.length} source records · ${escape(metadata.format)} conversation</p><div class="layout"><div>${parent ? '<p class="trace-notice">This session references earlier history. This snapshot displays only records it contains; parent history is not automatically imported.</p>' : ""}<div class="tabs" role="group" aria-label="Trace display"><button type="button" data-trace-mode="dialogue" aria-pressed="true">Dialogue</button><button type="button" data-trace-mode="records" aria-pressed="false">Source records</button></div><p class="meta">Dialogue is expanded; tool and context records remain available below.</p>${pagination}${(await Promise.all(selected.map((event) => renderEvent(event, metadata.id, positions)))).join("")}${pagination}</div><aside class="sidebar"><details data-responsive-details open><summary>Conversation details</summary><dl class="trace-details"><dt>Harness</dt><dd>${escape(metadata.format)}</dd><dt>Source records</dt><dd>${events.length}</dd><dt>Snapshot</dt><dd>${escape(metadata.id)}</dd>${metadata.session_id ? `<dt>Session</dt><dd>${escape(metadata.session_id)}</dd>` : ""}</dl></details><section><h2>On this page</h2><ul class="link-list">${selected
+    `<p class="breadcrumb">${link("/traces/", "Conversations")} / ${escape(metadata.format)}</p><h1>${escape(metadata.title)}</h1><p class="lede">${events.length} source records · ${escape(metadata.format)} conversation</p><div class="layout"><div>${parent ? '<p class="trace-notice">This session references earlier history. This snapshot displays only records it contains; parent history is not automatically imported.</p>' : ""}<div class="tabs" role="group" aria-label="Trace display"><button type="button" data-trace-mode="dialogue" aria-pressed="true">Dialogue</button><button type="button" data-trace-mode="records" aria-pressed="false">Source records</button></div><p class="meta">Dialogue is expanded; tool and context records remain available below.</p>${pagination}${(await Promise.all(selected.map((event) => renderEvent(event, metadata.id, positions)))).join("")}${pagination}</div><aside class="sidebar"><details data-responsive-details open><summary>Conversation details</summary><dl class="trace-details"><dt>Harness</dt><dd>${escape(metadata.format)}</dd><dt>Source records</dt><dd>${events.length}</dd><dt>Snapshot</dt><dd>${escape(metadata.id)}</dd>${metadata.session_id ? `<dt>Session</dt><dd>${escape(metadata.session_id)}</dd>` : ""}</dl></details><section><h2>On this page</h2><ul class="link-list">${selected
       .filter((ev) => ["user", "assistant"].includes(ev.kind) && !ev.mirrorOf)
       .slice(0, 20)
       .map(
@@ -91,7 +91,7 @@ async function run({
           `<li>${link(`#line-${ev.line}`, `${ev.kind} · line ${ev.line}`)}</li>`,
       )
       .join("")}</ul></section><!-- cited-by --></aside></div>`,
-    { active: "Traces" },
+    { active: "Conversations" },
   );
   return {
     id: metadata.id,

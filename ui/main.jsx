@@ -1,55 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { Tabs } from "@base-ui/react/tabs";
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from "./components/dialog.jsx";
-function QuickSearch() {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const onKey = (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setOpen((current) => !current);
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="quick-search-trigger">
-        Find anything <kbd>⌘ / Ctrl K</kbd>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogTitle>Search your knowledge</DialogTitle>
-        <DialogDescription>
-          Find articles and the conversations behind them.
-        </DialogDescription>
-        <form action="/search/" role="search">
-          <label htmlFor="dialog-query">Search terms</label>
-          <input
-            id="dialog-query"
-            name="q"
-            type="search"
-            maxLength={300}
-            placeholder="Projects, people, decisions…"
-            required
-          />
-          <button type="submit">Search</button>
-        </form>
-        <nav aria-label="Quick navigation">
-          <a href="/wiki/">Browse topics</a>
-          <a href="/traces/">Explore conversations</a>
-        </nav>
-      </DialogContent>
-    </Dialog>
-  );
-}
+import { QuickSearch } from "./components/quick-search.jsx";
 const search = document.querySelector("#quick-search");
 if (search) createRoot(search).render(<QuickSearch />);
 // Preserve all server-rendered panels when scripting is unavailable or printing.

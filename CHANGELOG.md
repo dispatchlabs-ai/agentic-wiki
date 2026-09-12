@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.3 — 2026-09-12
+
+- Use shared React components for the server-rendered header, navigation, footer,
+  feed cards and date filters. Share the search form between header fallback,
+  dialog and results page; content continues to render on demand without a build.
+- Rename navigation to Articles and Conversations, clarify the Search trigger,
+  and simplify the mobile home page to one heading with smaller feed titles.
+- Show bounded article descriptions in the feed instead of internal edit summaries;
+  titles open articles and View changes retains access to revision comparisons.
+  Original summaries remain in history. No content or API migration is required.
+
 ## 0.3.2 — 2026-09-12
 
 - Simplify the identity to an open book in the same upright orientation, removing
