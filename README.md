@@ -5,8 +5,8 @@ to the conversations behind its knowledge.
 
 Keep project knowledge in Markdown you own. Search it from a browser or an MCP
 client, follow a claim to its original evidence, and review updates in Git history.
-The wiki engine needs no model, embedding service, database server, or frontend
-build. An agent client uses its own model and account.
+The wiki engine needs no model, embedding service, database server, or content
+build. Browser controls are bundled locally during `npm ci`. An agent client uses its own model and account.
 
 ![Atlas Labs example article with linked evidence, revision history, and backlinks](docs/assets/atlas-labs-desktop.png)
 
@@ -26,7 +26,7 @@ Each instance has one access boundary: everyone with access can read all its
 articles, history, and traces. Shared hosting requires your own HTTPS proxy and
 access control. See [security](SECURITY.md) before connecting private content.
 
-**Latest release: 0.2.3 — initial development source release.** Public contracts
+**Latest release: 0.3.0 — initial development source release.** Public contracts
 are evolving. The quickstart below uses `main`, which may include unreleased
 changes; see the [changelog](CHANGELOG.md) and [release policy](docs/releases.md).
 Created by Chris Reynolds, cofounder of **Dispatch Labs AI**, and released under MIT.
@@ -108,7 +108,8 @@ An explanation with [[example-person|a linked person]] and ordinary
   Existing custom metadata is preserved by the writer. Citations can use Markdown
   or verified structured quotations with a configured external evidence service.
 - GFM tables, task checkboxes, footnotes and wiki links render as sanitized HTML.
-  Raw HTML and executable frontmatter/MDX are not supported. Code spans and fenced
+  Alerts, math, syntax highlighting, Mermaid, tabs, figures and disclosures follow
+  the [Markdown profile](docs/markdown-profile.md). Raw HTML and executable frontmatter/MDX are not supported. Code spans and fenced
   code do not create wiki links. Every wiki link must resolve in the committed tree.
 - Commit ordinary file edits to publish them. Dirty files are ignored. To delete,
   update incoming links and remove the file in the same Git commit.
@@ -143,8 +144,9 @@ immutable JSONL snapshots use a bounded worker pool and cache; see
 
 `src/git-wiki.mjs` validates committed trees and reads history from Git objects.
 `src/wiki-search.mjs` transactionally updates section passages and backlinks only
-for changed blobs. `src/render.mjs` uses remark/rehype sanitization; the small HTML
-shell and browser module need no build step. `src/editor.mjs` coordinates Git writes;
+for changed blobs. `src/render.mjs` uses remark/rehype sanitization; the HTML
+shell stays server-rendered. Browser controls are bundled once during engine setup;
+content updates need no build step. `src/editor.mjs` coordinates Git writes;
 `src/server.mjs` connects these interfaces.
 
 The service checks HEAD every second and on requests. Malformed trees retain the

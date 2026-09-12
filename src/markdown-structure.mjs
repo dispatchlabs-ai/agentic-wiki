@@ -1,8 +1,14 @@
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import remarkDirective from "remark-directive";
 
-export const markdownParser = unified().use(remarkParse).use(remarkGfm);
+export const markdownParser = unified()
+  .use(remarkParse)
+  .use(remarkGfm)
+  .use(remarkMath)
+  .use(remarkDirective);
 export function nodeText(node) {
   if (node.type === "image") return node.alt || "";
   if (typeof node.value === "string") return node.value;

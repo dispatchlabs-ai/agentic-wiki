@@ -1,3 +1,9 @@
+import rehypeKatex from "rehype-katex";
+import {
+  richStructures,
+  richCode,
+  namespaceFootnotes,
+} from "./rich-markdown.mjs";
 import {
   markdownEnhancements,
   capturedMedia,
@@ -91,15 +97,62 @@ function tableRegions() {
 }
 const parser = markdownParser()
   .use(markdownEnhancements)
+  .use(richStructures)
   .use(headingIds)
   .use(wikiLinks)
   .use(remarkRehype)
-  .use(rehypeSanitize, { ...defaultSchema, clobberPrefix: "" })
+  .use(rehypeSanitize, {
+    ...defaultSchema,
+    clobberPrefix: "",
+    tagNames: [
+      ...defaultSchema.tagNames,
+      "aside",
+      "figure",
+      "figcaption",
+      "details",
+      "summary",
+    ],
+    attributes: {
+      ...defaultSchema.attributes,
+      "*": [
+        ...defaultSchema.attributes["*"],
+        ["className", /^callout(?:-\w+)?$/, /^md-[\w-]+$/],
+      ],
+      section: [
+        ...(defaultSchema.attributes.section || []).filter(
+          (a) => a[0] !== "className",
+        ),
+        ["className", "footnotes", "md-tab"],
+      ],
+      h4: [
+        ...(defaultSchema.attributes.h4 || []).filter(
+          (a) => a[0] !== "className",
+        ),
+        ["className", "sr-only", "md-tab-title"],
+      ],
+      code: [
+        ...defaultSchema.attributes.code,
+        ["className", /^language-./, "math-inline", "math-display"],
+      ],
+    },
+  })
+  .use(rehypeKatex, {
+    output: "mathml",
+    trust: false,
+    strict: "warn",
+    maxExpand: 1000,
+    maxSize: 20,
+  })
+  .use(richCode)
   .use(capturedMedia)
   .use(tableRegions)
   .use(rehypeStringify);
-export const renderMarkdown = async (body) =>
-  String(await parser.process(body));
+export const renderMarkdown = async (body, namespace = "") =>
+  String(
+    await parser()
+      .use(() => namespaceFootnotes(namespace.replace(/[^a-zA-Z0-9-]/g, "-")))
+      .process(body),
+  );
 export const safeUrl = (url) => {
   if (typeof url !== "string" || /[\u0000-\u0020\\]/.test(url)) return null;
   if (/^https?:\/\//i.test(url) || /^\/(?!\/)/.test(url) || /^[?#]/.test(url))
@@ -130,7 +183,7 @@ export const queryLink = (pathname, params) =>
     ),
   ).toString();
 export function shell(title, body, { active = "", className = "" } = {}) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escape(title)} · Agentic Wiki</title><script src="/assets/theme.js"></script><link rel="stylesheet" href="/assets/theme.css"><link rel="stylesheet" href="/assets/style.css"><script type="module" src="/assets/client.js"></script></head><body><a class="skip-link" href="#main">Skip to content</a><header class="site-header"><a href="/" class="brand">Agentic Wiki<span class="brand-subtitle">Memory, with a path back to the evidence</span></a><nav class="site-nav" aria-label="Main navigation">${[
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escape(title)} · Agentic Wiki</title><script src="/assets/theme.js"></script><link rel="stylesheet" href="/assets/theme.css"><link rel="stylesheet" href="/assets/typeset.css"><link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/ui.css"><script type="module" src="/assets/vendor/ui.js"></script><script type="module" src="/assets/client.js"></script></head><body><a class="skip-link" href="#main">Skip to content</a><header class="site-header"><a href="/" class="brand">Agentic Wiki<span class="brand-subtitle">Memory, with a path back to the evidence</span></a><nav class="site-nav" aria-label="Main navigation">${[
     ["/", "Home"],
     ["/wiki/", "Topics"],
     ["/traces/", "Traces"],
@@ -141,7 +194,7 @@ export function shell(title, body, { active = "", className = "" } = {}) {
     )
     .join(
       "",
-    )}</nav><form class="header-search" action="/search/" role="search"><label class="sr-only" for="header-query">Search the wiki</label><input id="header-query" name="q" type="search" placeholder="Search the wiki" maxlength="300"><button>Search</button></form><a class="mobile-search" href="/search/">Search</a></header><main id="main" class="${escape(className)}">${body}</main><footer><span>Agentic Wiki · ${link("/api/articles/authoring.json", "Agent API")}</span><label>Appearance<select id="appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></footer></body></html>`;
+    )}</nav><form class="header-search" action="/search/" role="search"><label class="sr-only" for="header-query">Search the wiki</label><input id="header-query" name="q" type="search" placeholder="Search the wiki" maxlength="300"><button>Search</button></form><span id="quick-search"></span><a class="mobile-search" href="/search/">Search</a></header><main id="main" class="${escape(className)}">${body}</main><footer><span>Agentic Wiki · ${link("/api/articles/authoring.json", "Agent API")}</span><label>Appearance<select id="appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></footer></body></html>`;
 }
 export function sources(page) {
   const found = new Map();
@@ -221,7 +274,7 @@ export async function article(
     .filter(Boolean);
   return shell(
     p.title,
-    `<div class="layout article-layout"><div>${articleHeader(p, "Article", { write, historical: !!revision })}<div class="revision-meta"><p class="meta">Revision ${p.number} · Updated ${date(p.created_at)}</p>${write && !revision ? `<a class="edit-article" href="/wiki/${p.id}/edit/">Edit article</a>` : ""}</div>${revision ? `<nav class="actions" aria-label="Revision navigation">${p.number > 1 ? link(`/wiki/${id}/revision/${p.number - 1}/`, "Previous revision") : ""}${p.number < p.revisionCount ? link(`/wiki/${id}/revision/${p.number + 1}/`, "Next revision") : ""}${link(queryLink(`/wiki/${id}/compare/`, { from: p.number, to: p.revisionCount }), "Compare with current")}</nav>` : `<div class="notice">Latest change: ${escape(p.summary)}${p.number > 1 ? ` · ${link(queryLink(`/wiki/${id}/compare/`, { from: p.number - 1, to: p.number }), "View changes →")}` : ""}</div>`}${toc.length ? `<details class="mobile-toc"><summary>On this page</summary>${tocLinks}</details>` : ""}<article>${await renderMarkdown(p.body)}${await attachmentsHTML(p.attachments || [])}${
+    `<div class="layout article-layout"><div>${articleHeader(p, "Article", { write, historical: !!revision })}<div class="revision-meta"><p class="meta">Revision ${p.number} · Updated ${date(p.created_at)}</p>${write && !revision ? `<a class="edit-article" href="/wiki/${p.id}/edit/">Edit article</a>` : ""}</div>${revision ? `<nav class="actions" aria-label="Revision navigation">${p.number > 1 ? link(`/wiki/${id}/revision/${p.number - 1}/`, "Previous revision") : ""}${p.number < p.revisionCount ? link(`/wiki/${id}/revision/${p.number + 1}/`, "Next revision") : ""}${link(queryLink(`/wiki/${id}/compare/`, { from: p.number, to: p.revisionCount }), "Compare with current")}</nav>` : `<div class="notice">Latest change: ${escape(p.summary)}${p.number > 1 ? ` · ${link(queryLink(`/wiki/${id}/compare/`, { from: p.number - 1, to: p.number }), "View changes →")}` : ""}</div>`}${toc.length ? `<details class="mobile-toc"><summary>On this page</summary>${tocLinks}</details>` : ""}<article class="typeset typeset-docs">${await renderMarkdown(p.body)}${await attachmentsHTML(p.attachments || [])}${
       (Array.isArray(p.evidence) ? p.evidence : []).length
         ? `<section class="article-evidence"><h2>Source passages</h2>${(Array.isArray(
             p.evidence,

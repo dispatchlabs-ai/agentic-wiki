@@ -29,7 +29,10 @@ test("recognized envelope uses attachment cards while preserving the original", 
     },
     { pages: new Map() },
   );
-  assert.match(html, /<div class="prose"><p>Please inspect this\.<\/p>/);
+  assert.match(
+    html,
+    /<div class="prose typeset typeset-chat"><p>Please inspect this\.<\/p>/,
+  );
   assert.match(
     html,
     /Original recorded message<\/summary><pre># Files mentioned/,

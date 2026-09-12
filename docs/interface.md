@@ -8,8 +8,8 @@ and trace search, the trace catalog, and trace reading.
 
 `public/theme.css` owns semantic color tokens. Light mode uses restrained blue
 links (`#1a65a6`); dark mode uses `#8ab4f8`. `public/style.css` owns layout and
-typography. The desktop shell is capped at 1280px, with a 70/30 content/sidebar
-split and serif article prose. Mobile prose uses system sans serif, with compact
+typography. The desktop shell is capped at 1536px, with a bounded reading column and sidebar.
+Article and conversation prose use shadcn Typeset with system sans serif. Mobile uses compact
 metadata spacing and a separate Edit link outside the reading tabs. At 760px and below, sidebars move into the reading flow, filters
 collapse into disclosures, comparisons stack, and revision selectors fill their
 rows. Simple Markdown tables with up to four columns become labeled records;
@@ -52,7 +52,7 @@ checks, atomic commits, and retry receipts. A stale revision requires reconcilia
 
 Run `npm run check` and `npm run test:browser`. Browser fixtures use temporary
 synthetic content and trace repositories. Coverage includes eleven routes at
-390px, 768px, and 1440px in both themes, document overflow, appearance persistence,
+320px, 390px, 768px, 1024px, 1440px, 1920px, and 2560px in both themes, document overflow, appearance persistence,
 mobile filters, trace anchors, preview sanitization, draft retention, and saving.
 Review screenshots are written under ignored `.runtime/responsive-review/`.
 
@@ -63,3 +63,9 @@ or rewrites their history. Maintenance commits remain visible in historical view
 
 See [existing archive integration](external-evidence.md) for the optional provider,
 its API differences, native conversation URLs, files, and concurrent search.
+
+The [Markdown profile](markdown-profile.md) documents rich blocks and browser
+asset setup. Shadcn/Base UI supplies the search dialog and content tabs; ordinary
+server-rendered navigation and forms retain native behavior. Search opens with
+Ctrl/Command+K. Rich-feature tests cover keyboard focus, no-JavaScript reading,
+isolated Mermaid rendering, preview parity and live content commits.

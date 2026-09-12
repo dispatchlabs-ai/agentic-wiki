@@ -23,6 +23,7 @@ jobs:
           node-version: ${{ matrix.node }}
           package-manager-cache: false
       - run: npm ci --ignore-scripts
+      - run: npm run build:ui
       - run: npm run check
       - run: npm audit --omit=dev --audit-level=high
       - if: matrix.node == '24.19.0' && matrix.os == 'ubuntu-24.04'

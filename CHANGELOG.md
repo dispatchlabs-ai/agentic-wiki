@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-09-12
+
+- Add shadcn Typeset, a Base UI search dialog and content tabs, and a consistent
+  responsive reader/editor surface from 320px phones to 2560px desktops.
+- Render alerts, highlighted code with copying, native MathML, isolated Mermaid
+  diagrams, and named tabs, figures and disclosures through the shared renderer.
+- Namespace conversation footnotes while preserving original event/source-line
+  citations, article anchors, captured media, revision checks and edit receipts.
+- Preserve server-side, on-demand Markdown and JSONL rendering. Content commits
+  need no rebuild or redeployment; browser assets build once during `npm ci`.
+- **Upgrade:** users of `npm ci --ignore-scripts` must run `npm run build:ui`.
+  Search indexes rebuild automatically for the richer parser. Review literal
+  dollar signs and directive fences now interpreted by the Markdown profile.
+  No content or trace migration is required.
+- This minor pre-1.0 release also includes the previously unreleased MCP response
+  migration below. Clients must support resource-link results for large reads.
 
 - Reuse compiled MCP tool schemas across requests to prevent SDK cache growth.
 - Reject unsupported MCP methods before reading their bodies, preserving the

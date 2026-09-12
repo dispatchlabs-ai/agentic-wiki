@@ -97,6 +97,8 @@ export function createWiki({
   const timer = setInterval(refresh, 1000);
   timer.unref();
   const server = http.createServer(async (req, res) => {
+    let browserAsset = false,
+      diagramDocument = false;
     const send = (status, value, type = "application/json") => {
       res.writeHead(status, {
         "Content-Type": `${type}; charset=utf-8`,
@@ -105,9 +107,11 @@ export function createWiki({
           : {}),
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
+        ...(browserAsset ? { "Access-Control-Allow-Origin": "*" } : {}),
         "X-Wiki-Commit": wiki.head,
-        "Content-Security-Policy":
-          "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": diagramDocument
+          ? "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data:; base-uri 'none'; frame-ancestors 'self'; sandbox allow-scripts"
+          : "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; frame-src 'self'",
       });
       if (value?.transport === "file") {
         return pipeline(fs.createReadStream(value.path), res).finally(() =>
@@ -282,7 +286,25 @@ export function createWiki({
       }
       if (req.method !== "GET")
         return send(405, { error: "Method not allowed" });
+      const vendor = /^\/assets\/vendor\/([a-zA-Z0-9.-]+\.(?:js|txt))$/.exec(
+        url.pathname,
+      );
+      if (vendor) {
+        const filename = path.join(assetRoot, "vendor", vendor[1]);
+        if (!fs.existsSync(filename))
+          return send(404, { error: "Asset not found" });
+        browserAsset = true;
+        return send(
+          200,
+          fs.readFileSync(filename, "utf8"),
+          vendor[1].endsWith(".js") ? "text/javascript" : "text/plain",
+        );
+      }
       const asset = {
+        "/assets/typeset.css": ["typeset.css", "text/css"],
+        "/assets/ui.css": ["ui.css", "text/css"],
+        "/assets/diagram.css": ["diagram.css", "text/css"],
+        "/assets/diagram.html": ["diagram.html", "text/html"],
         "/assets/edit-contract.js": ["edit-contract.js", "text/javascript"],
         "/assets/wiki-tools.js": ["wiki-tools.js", "text/javascript"],
         "/assets/client.js": ["client.js", "text/javascript"],
@@ -291,12 +313,14 @@ export function createWiki({
         "/assets/theme.css": ["theme.css", "text/css"],
         "/assets/theme.js": ["theme.js", "text/javascript"],
       }[url.pathname];
-      if (asset)
+      if (asset) {
+        diagramDocument = url.pathname === "/assets/diagram.html";
         return send(
           200,
           fs.readFileSync(path.join(assetRoot, asset[0]), "utf8"),
           asset[1],
         );
+      }
       if (evidence) {
         const media = url.pathname.match(
           /^\/media\/([a-f0-9]{64}\.(?:png|jpg|gif|webp|pdf|bin))$/,

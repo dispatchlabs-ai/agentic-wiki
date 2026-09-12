@@ -5,7 +5,7 @@ import { performance } from "node:perf_hooks";
 import { sections } from "./markdown-structure.mjs";
 import { references } from "./wiki.mjs";
 
-const SCHEMA = "markdown-sections-v3";
+const SCHEMA = "markdown-sections-v4";
 export class WikiSearch {
   constructor(filename) {
     if (filename !== ":memory:")

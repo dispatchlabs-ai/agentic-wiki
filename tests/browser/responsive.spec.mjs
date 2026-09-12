@@ -127,7 +127,7 @@ test("all responsive views reflow, retain navigation and support both themes", a
     `/traces/${trace.id}/`,
     "/wiki/guide/edit/",
   ];
-  for (const width of [390, 768, 1440]) {
+  for (const width of [320, 390, 768, 1024, 1440, 1920, 2560]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const theme of ["light", "dark"]) {
       await page.emulateMedia({ colorScheme: theme });

@@ -146,3 +146,35 @@ Versions are pinned exactly; runtime dependencies are unchanged. npm audit found
 zero advisories at installation. Dates were checked against the npm registry:
 [TypeScript metadata](https://registry.npmjs.org/typescript),
 [Node type metadata](https://registry.npmjs.org/@types%2fnode).
+
+## Rich reader and controls — September 12, 2026
+
+New direct dependencies are pinned to versions published at least 30 days before
+this review. Registry publication dates were checked during implementation.
+
+| Package           | Version | Published  | Purpose                                    |
+| ----------------- | ------- | ---------- | ------------------------------------------ |
+| @base-ui/react    | 1.7.0   | 2026-08-04 | Accessible dialog and tabs                 |
+| react / react-dom | 19.2.8  | 2026-07-21 | Browser control islands                    |
+| esbuild           | 0.28.2  | 2026-08-08 | Local browser bundling during engine setup |
+| mermaid           | 11.16.1 | 2026-08-04 | Isolated, requested diagrams               |
+| lowlight          | 3.3.0   | 2024-12-14 | Class-based syntax highlighting            |
+| remark-directive  | 4.0.0   | 2025-02-27 | Named Markdown structures                  |
+| remark-math       | 6.0.0   | 2023-09-19 | Math parsing                               |
+| rehype-katex      | 7.0.1   | 2024-08-19 | Trusted, bounded MathML rendering          |
+
+All direct additions above are MIT licensed. Highlight.js is BSD-3-Clause; the
+lockfile and installed packages retain transitive license metadata. Browser
+bundling emits legal comments and a complete installed-package notice collection.
+Shadcn source attribution is recorded in `THIRD_PARTY_NOTICES.md`.
+
+Base UI 1.8.0, React 19.3.0 and Mermaid 12.0.0 were not adopted: they are newer than
+the applicable soak window. Mermaid 12 also introduced a dependency chain flagged
+by npm audit at this review. The selected Mermaid 11 dependency graph resolves
+patched lodash-es without an override; `npm audit --omit=dev --audit-level=high`
+reports zero vulnerabilities. Registry sources: [Base UI](https://registry.npmjs.org/@base-ui%2freact),
+[React](https://registry.npmjs.org/react), [esbuild](https://registry.npmjs.org/esbuild),
+[Mermaid](https://registry.npmjs.org/mermaid), [lowlight](https://registry.npmjs.org/lowlight),
+[remark-directive](https://registry.npmjs.org/remark-directive),
+[remark-math](https://registry.npmjs.org/remark-math),
+[rehype-katex](https://registry.npmjs.org/rehype-katex).

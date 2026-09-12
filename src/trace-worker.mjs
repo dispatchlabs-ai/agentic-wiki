@@ -24,11 +24,14 @@ async function renderEvent(event, id, positionByLine) {
   const notice = `${event.branch ? `<p class="trace-notice">Branch change · parent ${event.parentLine ? link(anchor(event.parentLine), `source line ${event.parentLine}`) : escape(r.parentId) + " (not in this snapshot)"}</p>` : ""}${event.superseded ? '<p class="trace-notice">Superseded entry revision; original retained.</p>' : ""}${event.mirrorOf ? `<p>Duplicate event representation of ${link(anchor(event.mirrorOf), `source line ${event.mirrorOf}`)}.</p>` : ""}`;
   let content = "";
   if (event.blocks?.length) {
-    for (const block of event.blocks) {
+    for (const [blockIndex, block] of event.blocks.entries()) {
       if (block.type === "text")
-        content += await renderMarkdown(block.text || "");
+        content += await renderMarkdown(
+          block.text || "",
+          `line-${line}-block-${blockIndex}`,
+        );
       else if (block.type === "thinking")
-        content += `<details><summary>Thinking</summary>${await renderMarkdown(block.thinking || block.text || "")}</details>`;
+        content += `<details><summary>Thinking</summary>${await renderMarkdown(block.thinking || block.text || "", `line-${line}-block-${blockIndex}`)}</details>`;
       else if (block.type === "toolCall")
         content += `<details><summary>Tool call · ${escape(block.name)}</summary><pre>${escape(json(block))}</pre></details>`;
       else
@@ -38,8 +41,8 @@ async function renderEvent(event, id, positionByLine) {
     content =
       kind === "tool"
         ? `<pre>${escape(event.text)}</pre>`
-        : await renderMarkdown(event.text);
-  const body = `${content}<details><summary>Original source record</summary><pre>${escape(JSON.stringify(r, null, 2))}</pre></details>`;
+        : await renderMarkdown(event.text, `line-${line}`);
+  const body = `<div class="typeset typeset-chat">${content}</div><details><summary>Original source record</summary><pre>${escape(JSON.stringify(r, null, 2))}</pre></details>`;
   const heading = `${escape(["user", "assistant"].includes(kind) ? kind : event.label)} · ${link(anchor(line), `line ${line}`)}${event.timestamp != null ? ` · ${escape(event.timestamp)}` : ""}`;
   return `<section id="line-${line}" class="trace-event" data-kind="${escape(kind)}">${notice}${!["user", "assistant"].includes(kind) || event.mirrorOf || event.superseded ? `<details><summary>${heading}</summary>${body}</details>` : `<h2>${heading}</h2>${body}`}</section>`;
 }
