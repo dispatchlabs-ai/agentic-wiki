@@ -72,3 +72,18 @@ isolated Mermaid rendering, preview parity and live content commits.
 
 Article sidebars move below the reading column through 1000px, avoiding a cramped
 tablet column. General filter/editor breakpoints remain at 760px.
+
+## Identity assets
+
+The header pairs a compact, two-page A/W mark with live system-font lettering.
+The decorative mark uses the link color token; the wordmark uses the text token,
+so both follow System, Light, Dark, and forced-color appearance. The logo remains
+a single home link with readable text when images or styles are unavailable.
+
+`public/brand-mark.svg` is the transparent vector symbol. Transparent lockups
+are `brand-light.svg`, `brand-dark.svg`, and `brand-mono.svg`; their lettering
+remains editable system-font text rather than outlined proprietary type.
+`favicon.svg` uses the same silhouette on a pale tile for either browser theme.
+Regenerate these assets with `node scripts/build-brand.mjs`. The geometry was
+manually constructed following an AI-generated concept and independent design
+review; the shipped SVGs contain no embedded raster images or external resources.

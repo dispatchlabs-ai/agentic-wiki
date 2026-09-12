@@ -24,6 +24,26 @@ body {
     sans-serif;
   letter-spacing: -0.045em;
 }
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.brand-mark {
+  display: block;
+  width: 27px;
+  height: 24px;
+  flex: none;
+  background-color: var(--color-link);
+  mask: url("/assets/brand-mark.svg") center / contain no-repeat;
+}
+@media (forced-colors: active) {
+  .brand-mark {
+    background-color: CanvasText;
+    forced-color-adjust: none;
+  }
+}
 .brand-subtitle {
   font-size: 12px;
   letter-spacing: 0;
@@ -449,7 +469,7 @@ pre {
   }
   .brand,
   .brand:visited {
-    font-size: 21px;
+    font-size: 20px;
   }
   #quick-search {
     grid-column: 2;
@@ -591,5 +611,22 @@ h3 {
   }
   .article-layout .mobile-toc {
     display: block;
+  }
+}
+
+@media (max-width: 359px) {
+  .brand-lockup {
+    gap: 6px;
+  }
+  .brand,
+  .brand:visited {
+    font-size: 18px;
+  }
+  .brand-mark {
+    width: 24px;
+    height: 21px;
+  }
+  .quick-search-trigger {
+    padding-inline: 8px;
   }
 }

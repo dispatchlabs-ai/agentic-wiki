@@ -301,6 +301,8 @@ export function createWiki({
         );
       }
       const asset = {
+        "/assets/brand-mark.svg": ["brand-mark.svg", "image/svg+xml"],
+        "/assets/favicon.svg": ["favicon.svg", "image/svg+xml"],
         "/assets/typeset.css": ["typeset.css", "text/css"],
         "/assets/ui.css": ["ui.css", "text/css"],
         "/assets/diagram.css": ["diagram.css", "text/css"],

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 — 2026-09-12
+
+- Add a clean vector book/monogram, compact responsive header branding, and a
+  favicon. The header follows light, dark, and forced-color appearance.
+- Supply transparent light, dark, and monochrome logo assets with editable
+  lettering and reproducible vector geometry. No content migration is required.
+
 ## 0.3.0 — 2026-09-12
 
 - Add shadcn Typeset, a Base UI search dialog and content tabs, and a consistent
