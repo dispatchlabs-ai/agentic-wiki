@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 — 2026-09-12
+
+- Simplify the identity to an open book in the same upright orientation, removing
+  the letter cutouts from the header, favicon, and all standalone SVG variants.
+  Responsive spacing and appearance behavior are unchanged. No migration required.
+
 ## 0.3.1 — 2026-09-12
 
 - Add a clean vector book/monogram, compact responsive header branding, and a

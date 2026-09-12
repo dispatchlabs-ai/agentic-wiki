@@ -75,7 +75,7 @@ tablet column. General filter/editor breakpoints remain at 760px.
 
 ## Identity assets
 
-The header pairs a compact, two-page A/W mark with live system-font lettering.
+The header pairs a compact, open-book mark with live system-font lettering.
 The decorative mark uses the link color token; the wordmark uses the text token,
 so both follow System, Light, Dark, and forced-color appearance. The logo remains
 a single home link with readable text when images or styles are unavailable.
